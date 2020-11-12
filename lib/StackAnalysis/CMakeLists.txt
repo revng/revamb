@@ -10,19 +10,19 @@ execute_process(COMMAND python3 -c "import pygraphviz"
 
 if(NOT HAS_PYGRAPHVIZ EQUAL "0")
   # Don't drop the whitespaces
-  message(FATAL_ERROR "  
+  message(FATAL_ERROR "
   Cannot find the pygraphviz module: ABIDataFlows.h cannot be generated.
   Please try one of the following commands:
-  
+
   Debian/Ubuntu:
     apt-get install python3-pygraphviz
-  
+
   Fedora/Red Hat/CentOS:
     yum install python3-pygraphviz
-  
+
   pip (current user only):
     pip3 install --user pygraphviz
-  
+
   In case of successful installation, the following command should succeed with no output:
     python3 -c 'import pygraphviz'")
 endif()
