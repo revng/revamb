@@ -571,9 +571,6 @@ private:
 
   void harvest();
 
-  /// \brief Decorate memory accesses with information about CSV aliasing
-  void aliasAnalysis();
-
   MetaAddressSet inflateAVIWhitelist();
 
 private:

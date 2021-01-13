@@ -8,7 +8,8 @@ revng_add_analyses_library_internal(revngBasicAnalyses
   GeneratedCodeBasicInfo.cpp
   RemoveNewPCCalls.cpp
   RemoveHelperCalls.cpp
-  PromoteGlobalToLocalVars.cpp)
+  PromoteGlobalToLocalVars.cpp
+  CSVAliasAnalysis.cpp)
 
 target_link_libraries(revngBasicAnalyses
   revngSupport)
