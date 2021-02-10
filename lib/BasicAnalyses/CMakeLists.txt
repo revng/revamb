@@ -6,7 +6,8 @@ revng_add_analyses_library_internal(revngBasicAnalyses
   EmptyNewPC.cpp
   RemoveDbgMetadata.cpp
   GeneratedCodeBasicInfo.cpp
-  RemoveNewPCCalls.cpp)
+  RemoveNewPCCalls.cpp
+  RemoveHelperCalls.cpp)
 
 target_link_libraries(revngBasicAnalyses
   revngSupport)
