@@ -1,0 +1,44 @@
+#pragma once
+
+//
+// This file is distributed under the MIT License. See LICENSE.md for details.
+//
+
+// This file has been automatically generated from scripts/monotone_framework_lattice.py, please don't change it
+
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Value.h"
+
+#include "revng/ABIAnalyses/Common.h"
+#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/MFP/MFP.h"
+#include "revng/Model/Binary.h"
+#include "revng/StackAnalysis/StackAnalysis.h"
+#include "revng/Support/revng.h"
+
+
+namespace ABIAnalyses::%LatticeName% {
+
+using namespace ABIAnalyses;
+using Register = model::Register::Values;
+using State = model::RegisterState::Values;
+
+struct CoreLattice {
+
+%LatticeElement%
+
+static const LatticeElement ExtremalLatticeElement = %ExtremalLatticeElement%;
+
+using TransferFunction = ABIAnalyses::TransferKind;
+
+static %isLessOrEqual%
+
+static %combineValues%
+
+static %transfer%
+
+};
+
+} // namespace ABIAnalyses::%LatticeName%

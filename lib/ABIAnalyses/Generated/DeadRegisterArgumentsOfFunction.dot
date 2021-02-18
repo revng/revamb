@@ -1,0 +1,20 @@
+#
+# This file is distributed under the MIT License. See LICENSE.md for details.
+#
+
+digraph DeadRegisterArgumentsOfFunction {
+  NoOrDead;
+  Maybe [peripheries=2];
+  Unknown;
+
+  # Lattice
+  NoOrDead->Maybe;
+  Maybe->Unknown;
+
+  # Transfer functions
+  Maybe->NoOrDead [label="Write"];
+  Maybe->NoOrDead [label="WeakWrite"];
+  Maybe->Unknown [label="Read"];
+  
+  Maybe->Maybe [label="None"];
+}

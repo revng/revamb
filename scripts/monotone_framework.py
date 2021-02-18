@@ -9,7 +9,7 @@
 # Additionally, one of the nodes should have a double border ("peripheries=2")
 # to represent it's the initial node.
 #
-# This script works and should keep working on Python 2.7 and Python 3.
+# This script works and should keep working on Python 3.6 .
 
 # Standard imports
 import sys
@@ -18,9 +18,10 @@ import re
 import tempfile
 from itertools import product
 from collections import defaultdict
+from typing import List, Mapping, Tuple
 
-# pygraphviz
-from pygraphviz import AGraph
+# networkx
+import networkx
 
 # numpy (optional)
 try:
@@ -36,23 +37,21 @@ except ImportError:
 out = lambda string: sys.stdout.write(string)
 log = lambda string: sys.stderr.write(string + "\n")
 
-def enumerate_graph(graph):
+def enumerate_graph(graph: networkx.MultiDiGraph):
   # Assign an identifier to each node
-  index = 0
-  for vertex in graph.nodes_iter():
-    vertex.attr["index"] = str(index)
-    index += 1
+  for i, vertex in enumerate(graph.nodes()):
+    graph.nodes[vertex]["index"] = str(i)
 
 def get_unique(container):
   assert len(container) == 1
   return container[0]
 
-def extract_lattice(input_graph):
+def extract_lattice(input_graph: networkx.MultiDiGraph):
   # Compute the lattice graph from the input graph. In practice we remove all
   # the edges that have a label, since they represent a transfer function
-  return drop_edge_if(input_graph, lambda edge: edge.attr["label"])
+  return drop_edge_if(input_graph, lambda edge, edge_data: "label" in edge_data)
 
-def compute_reachability_matrix(graph):
+def compute_reachability_matrix(graph: networkx.MultiDiGraph):
   # Build the adjacency matrix
   vertices = graph.number_of_nodes()
   edges = graph.number_of_edges()
@@ -63,9 +62,9 @@ def compute_reachability_matrix(graph):
     adj[x][x] = 1
 
   # Set to 1 all the cells representing a pair of adjacent vertices
-  for edge in graph.edges_iter():
-    x = int(edge[0].attr["index"])
-    y = int(edge[1].attr["index"])
+  for src, dst in graph.edges():
+    x = int(graph.nodes[src]["index"])
+    y = int(graph.nodes[dst]["index"])
     adj[x][y] = 1
 
   # Build the reachability matrix
@@ -83,11 +82,11 @@ def compute_reachability_matrix(graph):
 
   return reachability
 
-def is_cyclic(graph, entry):
+def is_cyclic(graph: networkx.MultiDiGraph, entry):
   visited = set()
   path = [object()]
   path_set = set(path)
-  stack = [graph.successors_iter(entry)]
+  stack = [graph.successors(entry)]
   while stack:
     for v in stack[-1]:
       if v in path_set:
@@ -96,24 +95,24 @@ def is_cyclic(graph, entry):
         visited.add(v)
         path.append(v)
         path_set.add(v)
-        stack.append(iter(graph.successors_iter(v)))
+        stack.append(iter(graph.successors(v)))
         break
     else:
       path_set.remove(path.pop())
       stack.pop()
   return False
 
-def check_lattice(lattice):
+def check_lattice(lattice: networkx.MultiDiGraph):
   # Check we have a single top and a single bottom
   top = None
   bottom = None
-  for v in lattice.nodes_iter():
+  for v in lattice.nodes():
     if lattice.in_degree(v) == 0:
-      assert bottom == None
+      assert bottom is None
       bottom = v
 
     if lattice.out_degree(v) == 0:
-      assert top == None
+      assert top is None
       top = v
   assert top is not None
   assert bottom is not None
@@ -123,29 +122,25 @@ def check_lattice(lattice):
 
   return top, bottom
 
-def drop_edge_if(graph, condition):
+def drop_edge_if(graph: networkx.MultiDiGraph, condition):
   new_graph = graph.copy()
 
-  for edge in new_graph.edges():
-    new_graph.remove_edge(edge)
-
-  for edge in graph.edges_iter():
-    if not condition(edge):
-      new_graph.add_edge(edge[0], edge[1], None, **edge.attr)
-
+  for src, dst, key, edge_data in list(new_graph.edges(keys=True, data=True)):
+    if condition((src, dst), edge_data):
+      new_graph.remove_edge(src, dst, key)
   return new_graph
 
-def extract_transfer_function_graph(input_graph, call_arcs):
+def extract_transfer_function_graph(input_graph: networkx.MultiDiGraph, call_arcs):
   # Build the transfer function graph. Drop all the edges without a label (those
   # representing the lattice).
-  tf_graph = drop_edge_if(input_graph, lambda edge: not edge.attr["label"])
+  tf_graph = drop_edge_if(input_graph, lambda edge, edge_data: "label" not in edge_data)
 
   # Add the ReturnFrom... arcs
   if call_arcs:
-    edge_labels = set(edge.attr["label"] for edge in tf_graph.edges())
-    for v in tf_graph.nodes_iter():
+    edge_labels = set(edge_data["label"] for _, _, edge_data in tf_graph.edges(data=True))
+    for v in tf_graph.nodes():
 
-      return_edge_name = "ReturnFrom" + v.name
+      return_edge_name = "ReturnFrom" + v
 
       # Check if the ReturnFrom edge has already been explicitly provided
       if return_edge_name in edge_labels:
@@ -156,39 +151,38 @@ def extract_transfer_function_graph(input_graph, call_arcs):
       assert len(source) <= 1
       if source:
         source = list(source)[0]
-        tf_graph.add_edge(source, v)
-        new_edge = tf_graph.get_edge(source, v)
+        edge_key = tf_graph.add_edge(source, v)
+        new_edge = tf_graph.edges[(source, v, edge_key)]
       else:
-        tf_graph.add_edge(v, v)
-        new_edge = tf_graph.get_edge(v, v)
-      new_edge.attr["label"] = return_edge_name
+        edge_key = tf_graph.add_edge(v, v)
+        new_edge = tf_graph.edges[(v, v, edge_key)]
+      new_edge["label"] = return_edge_name
 
   return tf_graph
 
-def check_transfer_functions(tf_graph, reachability, transfer_functions):
+def check_transfer_functions(tf_graph: networkx.MultiDiGraph,
+                             reachability: List[List[float]],
+                             transfer_functions: Mapping[str, List[Tuple[str, str]]]):
   tf_graph = tf_graph.copy()
   # Automatically add self-loops where required
   all_vertices = set(tf_graph.nodes())
   for name, edges in transfer_functions.items():
     no_self = set()
-    for edge in edges:
-      no_self.add(edge[0])
+    for source, _ in edges:
+      no_self.add(source)
     need_self = all_vertices - no_self
     for vertex in need_self:
-      tf_graph.add_edge(vertex, vertex)
-      new_edge = tf_graph.get_edge(vertex, vertex)
-      new_edge.attr["label"] = name
-      edges.append(new_edge)
+      tf_graph.add_edge(vertex, vertex, label=name)
+      edges.append((vertex, vertex))
 
   result = True
-  s = lambda edge: int(edge[0].attr["index"])
-  d = lambda edge: int(edge[1].attr["index"])
+  s = lambda edge: int(tf_graph.nodes[edge[0]]["index"])
+  d = lambda edge: int(tf_graph.nodes[edge[1]]["index"])
   lte = lambda a, b: reachability[a][b] != 0
   for name, edges in transfer_functions.items():
     for a, b in product(edges, edges):
       if a == b:
         continue
-
       if lte(s(a), s(b)) and not lte(d(a), d(b)):
         result = False
         log("The transfer function {} is not monotone:\n".format(name))
@@ -198,10 +192,26 @@ def check_transfer_functions(tf_graph, reachability, transfer_functions):
                                               b[1].name))
 
   return result
+def load_graph(path: str) -> networkx.MultiDiGraph:
+  '''
+  Loads a networkx.MultiDiGraph from a dot file
+  Notes:
+  - pydot treats every attribute as a string, so we need to manually unquote 
+    strings
+  '''
+  graph = networkx.MultiDiGraph(networkx.nx_pydot.read_dot(path))
+  for _, _, data in graph.edges(data=True):
+    for key, val in data.items():
+      if isinstance(val, str):
+        if len(val) > 2:
+          if val[0] == '"' and val[-1] == '"':
+            val = val[1:-1]
+            data[key] = val
+  return graph
 
 def process_graph(path, call_arcs):
   out = ""
-  input_graph = AGraph(path)
+  input_graph = load_graph(path)
 
   enumerate_graph(input_graph)
 
@@ -215,14 +225,13 @@ def process_graph(path, call_arcs):
   tf_graph = extract_transfer_function_graph(input_graph, call_arcs)
 
   transfer_functions = defaultdict(lambda: [])
-  for edge in tf_graph.edges_iter():
-    transfer_functions[edge.attr["label"]].append(edge)
+  for src, dst, edge_data in tf_graph.edges(data=True):
+    transfer_functions[edge_data["label"]].append((src, dst))
 
   # Check the monotonicity of the transfer function
   assert check_transfer_functions(tf_graph, reachability, transfer_functions)
 
   name = input_graph.name
-
   # Generate C++ class
   out += ("""class {} {{
 public:
@@ -233,23 +242,21 @@ public:
 """)
 
   # Get the default lattice element (has the "peripheries" property)
-  default = [v.name
-             for v in lattice.nodes_iter()
-             if v.attr["peripheries"]][0]
-
+  default = [v
+             for v, v_data in lattice.nodes(data=True)
+             if "peripheries" in v_data][0]
   # Get all the names
-  values = sorted([v.name for v in lattice.nodes_iter()])
+  values = sorted([v for v in lattice.nodes()])
   out += ("    " + ",\n    ".join(values) + "\n")
   out += ("""  };
 
 """)
-
   # Print the enumeration of all the possible transfer functions
   out += ("""  enum TransferFunction {{
 """.format())
 
   # Get all the transfer function names
-  tfs = [e.attr["label"] for e in tf_graph.edges_iter()]
+  tfs = [e_data["label"] for _, _, e_data in tf_graph.edges(data=True)]
   out += ("    " + ",\n    ".join(sorted(tfs)) + "\n")
   out += ("""  };
 
@@ -268,22 +275,22 @@ public:
     return {};
   }}
 
-""".format(name, bottom.name, name, default))
+""".format(name, bottom, name, default))
 
   # Emit the combine operator
   out += ("""  void combine(const {} &Other) {{
 """.format(name))
 
   node_by_index = lambda index: get_unique([x
-                                            for x in lattice.nodes_iter()
-                                            if x.attr["index"] == str(index)])
+                                            for x, x_data in lattice.nodes(data=True)
+                                            if x_data["index"] == str(index)])
 
   result = defaultdict(lambda: [])
-  for v1 in lattice.nodes_iter():
-    for v2 in lattice.nodes_iter():
+  for v1, v1_data in lattice.nodes(data=True):
+    for v2, v2_data in lattice.nodes(data=True):
       if v1 != v2:
-        i1 = int(v1.attr["index"])
-        i2 = int(v2.attr["index"])
+        i1 = int(v1_data["index"])
+        i2 = int(v2_data["index"])
         nonzero = lambda i: set([x[0]
                                  for x in enumerate(reachability[i])
                                  if x[1] != 0])
@@ -294,7 +301,7 @@ public:
 
         result[output].append((v1, v2))
         assert output in result
-
+  
   first = True
   for output, pairs in sorted(result.items(), key=lambda x: x[0]):
     if first:
@@ -302,9 +309,9 @@ public:
     else:
       out += (""" else if (""")
     conditions = []
-    for this, other in sorted(pairs, key=lambda x: (x[0].name, x[1].name)):
+    for this, other in sorted(pairs, key=lambda x: (x[0], x[1])):
       condition = "(Value == {} && Other.Value == {})"
-      condition = condition.format(this.name, other.name)
+      condition = condition.format(this, other)
       conditions.append(condition)
     conditions[0] = conditions[0].lstrip()
     conditions_string = ("\n        || "
@@ -313,9 +320,9 @@ public:
     out += conditions_string.join(conditions)
     out += (""") {{
       Value = {};
-    }}""".format(output.name))
+    }}""".format(output))
     first = False
-
+  
   out += ("""
   }
 
@@ -324,17 +331,17 @@ public:
   # Emit the comparison operator of the lattice
   out += ("""  bool lowerThanOrEqual(const {} &Other) const {{
     return Value == Other.Value
-      || """.format(name, name))
+      || """.format(name))
 
   result = []
-  for v1 in sorted(lattice.nodes_iter(), key=lambda x: x.name):
-    for v2 in sorted(lattice.nodes_iter(), key=lambda x: x.name):
+  for v1 in sorted(lattice.nodes()):
+    for v2 in sorted(lattice.nodes()):
       if v1 != v2:
-        i1 = int(v1.attr["index"])
-        i2 = int(v2.attr["index"])
+        i1 = int(lattice.nodes[v1]["index"])
+        i2 = int(lattice.nodes[v2]["index"])
         if reachability[i1][i2] != 0:
           condition = """(Value == {} && Other.Value == {})"""
-          condition = condition.format(v1.name, v2.name)
+          condition = condition.format(v1, v2)
           result.append(condition)
 
   out += ("\n      || ".join(result))
@@ -343,12 +350,12 @@ public:
 
 """)
 
-  tf_names = sorted([e.attr["label"] for e in tf_graph.edges_iter()])
+  tf_names = sorted([e_data["label"] for _, _, e_data in tf_graph.edges(data=True)])
 
   # Emit the transfer function implementation
   out += ("""  void transfer(TransferFunction T) {{
     switch(T) {{
-""".format(name))
+""".format())
   for tf in tf_names:
     out += ("""    case {}:
       switch(Value) {{
@@ -374,7 +381,7 @@ public:
   # Emit the transfer function implementation
   out += ("""  void transfer(GeneralTransferFunction T) {{
     switch(T) {{
-""".format(name))
+""".format())
   for tf in tf_names:
     out += ("""    case GeneralTransferFunction::{}:
       switch(Value) {{
@@ -430,7 +437,7 @@ public:
     return {}({});
   }}
 
-""".format(name, name, top.name))
+""".format(name, name, top))
 
   # Accessor for the current value
   out += ("""  Values value() const { return Value; }
@@ -443,7 +450,7 @@ public:
   template<typename T>
   void dump(T &Output) const {{
     switch(Value) {{
-""".format(name, name, name, top.name))
+""".format())
 
   for value in values:
     out += ("""    case {}:

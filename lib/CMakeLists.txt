@@ -17,6 +17,7 @@ macro(revng_add_library_internal NAME TYPE)
   revng_add_library("${NAME}" "${TYPE}" revng ${ARGN})
 endmacro()
 
+add_subdirectory(ABIAnalyses)
 add_subdirectory(BasicAnalyses)
 add_subdirectory(Dump)
 add_subdirectory(FunctionCallIdentification)

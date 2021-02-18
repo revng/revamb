@@ -1,0 +1,27 @@
+#
+# This file is distributed under the MIT License. See LICENSE.md for details.
+#
+
+digraph RegisterArgumentsOfFunctionCall {
+  Bottom;
+  Maybe [peripheries=2];
+  Yes;
+  Unknown;
+
+  # Lattice
+  Bottom->Yes;
+  Bottom->Maybe;
+  Yes->Unknown;
+  Maybe->Unknown;
+
+  # Transfer functions
+  Maybe->Yes [label="Write"];
+  Maybe->Unknown [label="Read"];
+  Maybe->Unknown [label="TheCall"];
+
+  # Prevent return values to become arguments right away
+  Maybe->Maybe [label="WeakWrite"];
+
+  Maybe->Maybe [label="None"];
+
+}

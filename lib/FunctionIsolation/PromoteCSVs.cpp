@@ -8,12 +8,12 @@
 #include "revng/ADT/GenericGraph.h"
 #include "revng/FunctionIsolation/PromoteCSVs.h"
 #include "revng/FunctionIsolation/StructInitializers.h"
+#include "revng/MFP/MFP.h"
 #include "revng/Support/IRHelpers.h"
-#include "revng/TypeShrinking/MFP.h"
 #include "revng/TypeShrinking/SetLattices.h"
 
 using namespace llvm;
-using namespace TypeShrinking;
+using namespace MFP;
 
 char PromoteCSVsPass::ID = 0;
 using Register = RegisterPass<PromoteCSVsPass>;

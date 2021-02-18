@@ -1,0 +1,23 @@
+#
+# This file is distributed under the MIT License. See LICENSE.md for details.
+#
+
+# This analysis works both for registers and stack slots
+
+digraph UsedArgumentsOfFunction {
+  Unknown;
+  Maybe [peripheries=2];
+  Yes;
+
+  # Lattice
+  Unknown->Maybe;
+  Maybe->Yes;
+
+  # Transfer functions
+  Maybe->Yes [label="Read"];
+  Maybe->Unknown [label="Write"];
+  Maybe->Unknown [label="WeakWrite"];
+
+  Maybe->Maybe [label="None"];
+
+}

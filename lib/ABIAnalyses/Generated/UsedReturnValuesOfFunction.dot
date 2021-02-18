@@ -1,0 +1,24 @@
+#
+# This file is distributed under the MIT License. See LICENSE.md for details.
+#
+
+digraph UsedReturnValuesOfFunction {
+  Bottom;
+  Maybe [peripheries=2];
+  YesOrDead;
+  Unknown;
+
+  # Lattice
+  Bottom->YesOrDead;
+  Bottom->Maybe;
+  YesOrDead->Unknown;
+  Maybe->Unknown;
+
+  # Transfer functions
+  Maybe->YesOrDead [label="Write"];
+  Maybe->YesOrDead [label="WeakWrite"];
+  Maybe->Unknown [label="Read"];
+
+  Maybe->Maybe [label="None"];
+
+}

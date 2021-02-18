@@ -24,7 +24,6 @@
 
 #include "revng/TypeShrinking/BitLiveness.h"
 #include "revng/TypeShrinking/DataFlowGraph.h"
-#include "revng/TypeShrinking/MFP.h"
 #include "revng/TypeShrinking/TypeShrinking.h"
 
 using namespace llvm;
