@@ -336,6 +336,10 @@ def run_translate(args):
                       "--isolate",
                       action="store_true",
                       help="Enable function isolation.")
+  parser.add_argument("-e",
+                      "--enforceabi",
+                      action="store_true",
+                      help="Enable ABI enforcement.")
   parser.add_argument("--base", help="Load address to employ in lifting.")
   parser.add_argument("-o", "--output", metavar="OUTPUT", help="Output path.")
   parser.add_argument("input", metavar="INPUT", help="The input binary.")
@@ -411,8 +415,8 @@ If you're just interested in lifting to LLVM IR, simply use `revng lift`.
         + lift_options
         + [relative(input), relative(output)])
 
-  # Perform function isolation
-  if args.isolate:
+  # Perform function isolation and ABI enforcement
+  if args.isolate and not args.enforceabi:
     isolated = "{}.isolated".format(executable)
     opt_invocation = build_opt_args(["-S",
                                      "-detect-function-boundaries",
@@ -421,6 +425,16 @@ If you're just interested in lifting to LLVM IR, simply use `revng lift`.
                                      "-o", relative(isolated)])
     run(opt_invocation)
     output = isolated
+  elif (args.isolate and args.enforceabi) or args.enforceabi:
+    opt = "{}.opt".format(executable)
+    opt_invocation = build_opt_args(["-S",
+                                     "-detect-abi",
+                                     "-isolate",
+                                     "-enforce-abi",
+                                     relative(output),
+                                     "-o", relative(opt)])
+    run(opt_invocation)
+    output = opt
 
   # Link with support
   linked = "{}.linked.ll".format(output)

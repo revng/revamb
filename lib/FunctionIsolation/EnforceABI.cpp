@@ -8,7 +8,9 @@
 
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Verifier.h"
@@ -49,6 +51,7 @@ static cl::opt<bool> DisableSafetyChecks("disable-enforce-abi-safety-checks",
 
 static bool shouldEmit(FunctionRegisterArgument V) {
   switch (V.value()) {
+  case FunctionRegisterArgument::Maybe:
   case FunctionRegisterArgument::Yes:
     return true;
   default:
@@ -68,6 +71,7 @@ static bool shouldEmit(FunctionCallRegisterArgument V) {
 
 static bool shouldEmit(FunctionReturnValue V) {
   switch (V.value()) {
+  case FunctionReturnValue::Maybe:
   case FunctionReturnValue::YesOrDead:
     return true;
   default:
@@ -148,8 +152,12 @@ private:
   void handleHelperFunctionCall(CallInst *Call);
   void generateCall(IRBuilder<> &Builder,
                     Function *Callee,
-                    FunctionsSummary::CallSiteDescription &CallSite);
+                    FunctionsSummary::CallSiteDescription &CallSite,
+                    bool IsPartOfFunctionDispatcher);
   void replaceCSVsWithAlloca();
+  void replaceCallWithInvoke();
+  void CSVsSerialization(Function *F, BasicBlock *RestoreBB);
+  void installUnwindBasicBlock(Function *F);
   void handleRoot();
 
 private:
@@ -159,6 +167,10 @@ private:
   std::map<Function *, Function *> OldToNew;
   Function *FunctionDispatcher;
   Function *OpaquePC;
+  DenseMap<std::pair<GlobalVariable *, Function *>, AllocaInst *> CSVMap;
+  DenseMap<Function *, BasicBlock *> UnwindEdgesMap;
+  Function *RaiseException;
+  GlobalVariable *RestoreCSVBitmask;
   LLVMContext &Context;
   std::map<HelperCallSite, Function *> HelperCallSites;
   std::map<GlobalVariable *, unsigned> CSVToIndex;
@@ -288,14 +300,27 @@ void EnforceABIImpl::run() {
   // Declare an opaque function used later to obtain a value to store in the
   // local %pc alloca, so that we don't incur in error when removing the bad
   // return pc checks.
-  Type *PCType = GCBI.pcReg()->getType()->getPointerElementType();
-  auto *OpaqueFT = FunctionType::get(PCType, {}, false);
-  OpaquePC = Function::Create(OpaqueFT,
-                              Function::ExternalLinkage,
-                              "opaque_pc",
-                              M);
-  OpaquePC->addFnAttr(Attribute::NoUnwind);
-  OpaquePC->addFnAttr(Attribute::ReadOnly);
+  if (DisableSafetyChecks) {
+    OpaqueFunctionsPool<FunctionType *> OpaquePCInitializer(&M, false);
+    OpaquePCInitializer.addFnAttribute(Attribute::ReadOnly);
+    OpaquePCInitializer.addFnAttribute(Attribute::NoUnwind);
+
+    Type *PCType = GCBI.pcReg()->getType()->getPointerElementType();
+    auto *OpaqueFT = FunctionType::get(PCType, {}, false);
+    OpaquePC = OpaquePCInitializer.get(OpaqueFT, OpaqueFT, "opaque_pc");
+  }
+
+  RaiseException = M.getFunction("raise_exception_helper");
+  revng_assert(RaiseException != nullptr);
+
+  // Create a bitmask to trace which CSVs need to be saved for the function
+  auto *ConstantZero = ConstantInt::get(Type::getInt64Ty(Context), 0);
+  RestoreCSVBitmask = new GlobalVariable(M,
+                                         Type::getInt64Ty(Context),
+                                         false,
+                                         GlobalValue::InternalLinkage,
+                                         ConstantZero,
+                                         "RestoreCSVBitmask");
 
   // Collect functions we need to handle
   std::vector<Function *> Functions;
@@ -366,6 +391,10 @@ void EnforceABIImpl::run() {
     }
   }
 
+  // Install BB to restore CSVs when an exception arises
+  for (auto &[Func, Desc] : FunctionsMap)
+    installUnwindBasicBlock(Func);
+
   // Handle function calls in isolated functions
   for (CallInst *Call : RegularFunctionCalls)
     handleRegularFunctionCall(Call);
@@ -379,6 +408,27 @@ void EnforceABIImpl::run() {
 
   // Promote CSVs to allocas
   replaceCSVsWithAlloca();
+
+  // Replace call to invoke inst in helper functions
+  replaceCallWithInvoke();
+
+  // Zero out RestoreCSVBitmask before calling raise_exception_helper
+  for (const auto &U : RaiseException->users()) {
+    InvokeInst *II = cast<InvokeInst>(U);
+    if (!II)
+      continue;
+
+    new StoreInst(Constant::getNullValue(
+                    RestoreCSVBitmask->getType()->getPointerElementType()),
+                  RestoreCSVBitmask,
+                  II);
+  }
+
+  // Fill unwind basic blocks with CSVs
+  for (auto &P : FunctionsMap) {
+    Function *F = P.first;
+    CSVsSerialization(F, UnwindEdgesMap[F]);
+  }
 
   // Drop function_dispatcher
   if (FunctionDispatcher != nullptr) {
@@ -443,23 +493,54 @@ void EnforceABIImpl::handleRoot() {
     // Collect arguments
     IRBuilder<> Builder(Invoke);
     std::vector<Value *> Arguments;
+    std::vector<GlobalVariable *> ReturnCSVs;
     for (auto &P : Function.RegisterSlots) {
       GlobalVariable *CSV = P.first;
+
       if (shouldEmit(P.second.Argument))
         Arguments.push_back(Builder.CreateLoad(CSV));
+
+      if (shouldEmit(P.second.ReturnValue))
+        ReturnCSVs.push_back(CSV);
+    }
+
+    BasicBlock *NormalDest;
+    if (!ReturnCSVs.empty()) {
+      NormalDest = BasicBlock::Create(Context,
+                                      BB.getName() + "__extract_retval",
+                                      Root,
+                                      &BB);
+      NormalDest->moveAfter(&BB);
+    } else {
+      NormalDest = Invoke->getNormalDest();
     }
 
     // Create the new invoke with the appropriate arguments
     auto *NewInvoke = Builder.CreateInvoke(Callee,
-                                           Invoke->getNormalDest(),
+                                           NormalDest,
                                            Invoke->getUnwindDest(),
                                            Arguments);
-    NewInvoke->setIsNoInline();
+
+    // Handle return values when a function is returning to
+    // `root` due to an exception.
+    if (!ReturnCSVs.empty()) {
+      Builder.SetInsertPoint(NormalDest);
+
+      if (ReturnCSVs.size() != 1) {
+        unsigned I = 0;
+        for (GlobalVariable *ReturnCSV : ReturnCSVs) {
+          Builder.CreateStore(Builder.CreateExtractValue(NewInvoke, { I }),
+                              ReturnCSV);
+          I++;
+        }
+      } else {
+        Builder.CreateStore(NewInvoke, ReturnCSVs[0]);
+      }
+      Builder.CreateBr(Invoke->getNormalDest());
+    }
 
     // Erase the old invoke
     Invoke->eraseFromParent();
-
-    // TODO: handle return values
   }
 }
 
@@ -686,19 +767,20 @@ void EnforceABIImpl::handleRegularFunctionCall(CallInst *Call) {
   if (DisableSafetyChecks or IsDirect) {
     // The callee is a well-known callee, generate a direct call
     IRBuilder<> Builder(Call);
-    generateCall(Builder, Callee, CallSite);
+    generateCall(Builder, Callee, CallSite, false);
 
-    // Create an additional store to the local %pc, so that the optimizer cannot
-    // do stuff with llvm.assume.
-    revng_assert(OpaquePC != nullptr);
-    auto *OpaqueValue = Builder.CreateCall(OpaquePC);
+    if (DisableSafetyChecks) {
+      // Create an additional store to the local %pc, so that the optimizer
+      // cannot do stuff with llvm.assume.
+      revng_assert(OpaquePC != nullptr);
+      auto *OpaqueValue = Builder.CreateCall(OpaquePC);
 
-    // The store here is done in the global CSV, since the
-    // `replaceCSVsWithAlloca` method pass after us, and place the corresponding
-    // alloca here.
-    Value *PCCSV = GCBI.pcReg();
-    Builder.CreateStore(OpaqueValue, PCCSV);
-
+      // The store here is done in the global CSV, since the
+      // `replaceCSVsWithAlloca` method pass after us, and place the
+      // corresponding alloca here.
+      Value *PCCSV = GCBI.pcReg();
+      Builder.CreateStore(OpaqueValue, PCCSV);
+    }
   } else {
     // If it's an indirect call, enumerate all the compatible callees and
     // generate a call for each of them
@@ -728,22 +810,23 @@ void EnforceABIImpl::handleRegularFunctionCall(CallInst *Call) {
         EnforceABILog << "[No: " << CSV->getName().data() << "]";
       } else {
         EnforceABILog << "[Yes]";
-        Count++;
 
         auto *Tuple = cast<MDTuple>(F->getMetadata("revng.func.entry"));
         revng_assert(Tuple != nullptr);
         auto PC = MetaAddress::fromConstant(QMD.extract<Constant *>(Tuple, 1));
 
         auto *Case = BasicBlock::Create(Context,
-                                        "",
+                                        "dispatchercase_" + Twine(Count),
                                         BeforeSplit->getParent(),
                                         AfterSplit);
         auto *Ty = cast<IntegerType>(PCCSV->getType()->getPointerElementType());
         Switch->addCase(ConstantInt::get(Ty, PC.asPC()), Case);
 
         Builder.SetInsertPoint(Case);
-        generateCall(Builder, F, CallSite);
+        generateCall(Builder, F, CallSite, true);
         Builder.CreateBr(AfterSplit);
+
+        Count++;
       }
       EnforceABILog << DoLog;
 
@@ -758,13 +841,16 @@ void EnforceABIImpl::handleRegularFunctionCall(CallInst *Call) {
 
 void EnforceABIImpl::generateCall(IRBuilder<> &Builder,
                                   Function *Callee,
-                                  CallSiteDescription &CallSite) {
+                                  CallSiteDescription &CallSite,
+                                  bool IsPartOfFunctionDispatcher) {
   revng_assert(Callee != nullptr);
 
   llvm::SmallVector<Type *, 8> ArgumentsTypes;
   llvm::SmallVector<Value *, 8> Arguments;
   llvm::SmallVector<Type *, 8> ReturnTypes;
   llvm::SmallVector<GlobalVariable *, 8> ReturnCSVs;
+
+  Value *Result = nullptr;
 
   bool IsDirect = (Callee != FunctionDispatcher);
   if (not IsDirect) {
@@ -801,6 +887,8 @@ void EnforceABIImpl::generateCall(IRBuilder<> &Builder,
     Callee = IndirectPlaceholderPool.get(NewType,
                                          NewType,
                                          "indirect_placeholder");
+
+    Result = Builder.CreateCall(Callee, Arguments);
   } else {
 
     // Additional debug checks if we are not emitting an indirect call.
@@ -808,10 +896,10 @@ void EnforceABIImpl::generateCall(IRBuilder<> &Builder,
               "Emitting call to " << getName(Callee) << " from "
                                   << getName(CallSite.Call));
 
-    FunctionDescription &Function = FunctionsMap.at(Callee);
-    revng_assert(Function.Function != nullptr
-                 and Function.Function->getName().startswith("bb."));
-    if (GlobalVariable *CSV = CallSite.isCompatibleWith(Function)) {
+    FunctionDescription &CalleeDescription = FunctionsMap.at(Callee);
+    revng_assert(CalleeDescription.Function != nullptr
+                 and CalleeDescription.Function->getName().startswith("bb."));
+    if (GlobalVariable *CSV = CallSite.isCompatibleWith(CalleeDescription)) {
       dbg << (CallSite.Call == nullptr ? "nullptr" :
                                          getName(CallSite.Call).data())
           << " -> "
@@ -821,7 +909,7 @@ void EnforceABIImpl::generateCall(IRBuilder<> &Builder,
     }
 
     // Collect arguments, returns and their type.
-    for (auto &P : Function.RegisterSlots) {
+    for (auto &P : CalleeDescription.RegisterSlots) {
       GlobalVariable *CSV = P.first;
 
       if (shouldEmit(P.second.Argument)) {
@@ -834,9 +922,57 @@ void EnforceABIImpl::generateCall(IRBuilder<> &Builder,
         ReturnCSVs.push_back(CSV);
       }
     }
+
+    BasicBlock *BB = Builder.GetInsertBlock();
+    Function *Caller = BB->getParent();
+
+    // If we are in a basic block of an isolated function,
+    // we generate an invoke instruction. Do not emit an invoke instruction
+    // if DisableSafetyChecks is on.
+    if (!DisableSafetyChecks && Caller->getName().startswith("bb.")
+        && !BB->getName().endswith("__continuation")) {
+      BasicBlock *NormalEdge;
+      std::string NormalEdgeName = std::string(BB->getName())
+                                   + "__continuation";
+
+      // If we are emitting an indirect call, we are dealing with a degenerate
+      // BB (has no terminator yet), since the basic block inside the jump table
+      // is still being created. Hence, we just need to create a new basic block
+      if (IsPartOfFunctionDispatcher) {
+        NormalEdge = BasicBlock::Create(Context,
+                                        NormalEdgeName,
+                                        Caller,
+                                        nullptr);
+
+        NormalEdge->moveAfter(BB);
+      } else {
+        NormalEdge = BB->splitBasicBlock(CallSite.Call, NormalEdgeName);
+        Builder.SetInsertPoint(BB);
+
+        // The branch created by splitBasicBlock is
+        // to be replaced with an invoke
+        BB->getTerminator()->eraseFromParent();
+      }
+
+      // NormalEdge cannot be null. If it is, something is wrong
+      revng_assert(NormalEdge != nullptr);
+
+      auto *UnwindEdge = UnwindEdgesMap[Caller];
+      Result = Builder.CreateInvoke(CalleeDescription.Function,
+                                    NormalEdge,
+                                    UnwindEdge,
+                                    Arguments);
+
+      if (IsPartOfFunctionDispatcher)
+        Builder.SetInsertPoint(NormalEdge);
+      else
+        Builder.SetInsertPoint(NormalEdge->getFirstNonPHI());
+
+    } else {
+      Result = Builder.CreateCall(CalleeDescription.Function, Arguments);
+    }
   }
 
-  auto *Result = Builder.CreateCall(Callee, Arguments);
   if (ReturnCSVs.size() != 1) {
     unsigned I = 0;
     for (GlobalVariable *ReturnCSV : ReturnCSVs) {
@@ -881,7 +1017,7 @@ void EnforceABIImpl::replaceCSVsWithAlloca() {
         Pointer = skipCasts(Pointer);
 
         if (auto *CSV = dyn_cast_or_null<GlobalVariable>(Pointer))
-          if (not GCBI.isSPReg(CSV))
+          if (!(GCBI.isSPReg(CSV) || GCBI.isPCReg(CSV)))
             CSVs.insert(CSV);
       }
     }
@@ -904,14 +1040,22 @@ void EnforceABIImpl::replaceCSVsWithAlloca() {
                                                 nullptr,
                                                 CSV->getName());
 
-      // Initialize all allocas with opaque, CSV-specific values
-      auto *Initializer = CSVInitializers.get(CSV->getName(),
-                                              CSVType,
-                                              {},
-                                              Twine("init_") + CSV->getName());
-      {
-        auto &B = InitializersBuilder;
-        B.CreateStore(B.CreateCall(Initializer), Alloca);
+      // If DisableSafetyChecks is on, we initialize all allocas with opaque,
+      // CSV-specific values. If off, we store a placeholder value to the alloca
+      // to verify for unitialized
+      if (DisableSafetyChecks) {
+        auto *Initializer = CSVInitializers.get(CSV->getName(),
+                                                CSVType,
+                                                {},
+                                                Twine("init_")
+                                                  + CSV->getName());
+        {
+          auto &B = InitializersBuilder;
+          B.CreateStore(B.CreateCall(Initializer), Alloca);
+        }
+      } else {
+        InitializersBuilder.CreateStore(ConstantInt::get(CSVType, 0xDEADBEEF),
+                                        Alloca);
       }
 
       // Ignore it if it's not a CSV
@@ -921,6 +1065,9 @@ void EnforceABIImpl::replaceCSVsWithAlloca() {
 
       auto CSVPos = CSVPosIt->second;
       CSVMaps[CSVPos][&F] = Alloca;
+
+      // Record the CSV to the global map as well.
+      CSVMap[std::make_pair(CSV, &F)] = Alloca;
     }
 
     Separator->eraseFromParent();
@@ -934,4 +1081,113 @@ void EnforceABIImpl::replaceCSVsWithAlloca() {
     if (not FunctionAllocas.empty())
       replaceAllUsesInFunctionsWith(CSV, FunctionAllocas);
   }
+}
+
+void EnforceABIImpl::replaceCallWithInvoke() {
+  SmallVector<Function *, 1> Helpers{ RaiseException };
+  for (Function *Callee : Helpers) {
+    for (const auto &U : Callee->users()) {
+      // New invoke uses are pushed in front, so it is safe
+      // to cast directly to CallInst
+      CallInst *CI = cast<CallInst>(U);
+      if (!CI)
+        continue;
+
+      BasicBlock *BB = CI->getParent();
+      StringRef ContEdgeName = Callee == RaiseException ? "__unreachable" :
+                                                          "__return";
+
+      BasicBlock *NormalEdge = BB->splitBasicBlock(CI,
+                                                   BB->getName()
+                                                     + ContEdgeName);
+      BasicBlock *UnwindEdge = UnwindEdgesMap[BB->getParent()];
+      BB->getInstList().pop_back();
+
+      // Transform `call` instructions in `invoke` jumping
+      // to the unwind block in case of exception
+      SmallVector<Value *, 4> InvokeArgs(CI->arg_begin(), CI->arg_end());
+      InvokeInst *II = InvokeInst::Create(CI->getCalledValue(),
+                                          NormalEdge,
+                                          UnwindEdge,
+                                          InvokeArgs,
+                                          CI->getName(),
+                                          BB);
+
+      II->setDebugLoc(CI->getDebugLoc());
+      II->setCallingConv(CI->getCallingConv());
+      II->setAttributes(CI->getAttributes());
+
+      // Replace it and remove the `call` inst
+      CI->replaceAllUsesWith(II);
+      revng_assert(CI->use_empty());
+
+      CI->eraseFromParent();
+    }
+  }
+}
+
+void EnforceABIImpl::CSVsSerialization(Function *F, BasicBlock *RestoreBB) {
+  IRBuilder<> Builder(RestoreBB->getTerminator());
+
+  for (const auto &CSVObj : CSVMap) {
+    const std::pair<GlobalVariable *, Function *> *CSVOfFunction = &(
+      CSVObj.first);
+    GlobalVariable *CSV = CSVOfFunction->first;
+    Value *AI = CSVObj.second;
+
+    if (CSVOfFunction->second != F)
+      continue;
+
+    // CSV serialization: iterate over all CSVs and check if the CSVs
+    // need to be assigned their equivalent local variable. A bitmask
+    // is maintained to check if the CSV has already been serialized.
+    // if (!(RestoreCSVBitMask & CSV[i]) && CSV_local  != 0xDEADBEEF) {
+    //   g_CSV = local_CSV;
+    //   RestoreCSVBitMask |= CSV[i];
+    // }
+    Value *BitmaskValue = Builder.CreateLoad(RestoreCSVBitmask);
+
+    Value *Shift = ConstantInt::get(Type::getInt64Ty(Context),
+                                    1 << CSVToIndex[CSV]);
+
+    Value *AlreadyStored = Builder.CreateAnd(BitmaskValue, Shift);
+    Value *Cond1 = Builder.CreateICmpEQ(AlreadyStored, Builder.getInt64(0));
+
+    Value *LoadAI = Builder.CreateLoad(AI);
+
+    Value *Marker = ConstantInt::get(CSV->getType()->getPointerElementType(),
+                                     0xDEADBEEF);
+    Value *Cond2 = Builder.CreateICmpNE(LoadAI, Marker);
+
+    Value *ResultCond = Builder.CreateAnd(Cond1, Cond2);
+
+    Value *LoadCSV = Builder.CreateLoad(CSV);
+    Value *Res = Builder.CreateSelect(ResultCond, LoadAI, LoadCSV);
+    Builder.CreateStore(Res, CSV);
+
+    Value *NewBitmaskValue = Builder.CreateOr(BitmaskValue, Shift);
+    Res = Builder.CreateSelect(ResultCond, BitmaskValue, NewBitmaskValue);
+    Builder.CreateStore(Res, RestoreCSVBitmask);
+  }
+}
+
+void EnforceABIImpl::installUnwindBasicBlock(Function *F) {
+  BasicBlock *UnwindEdge = BasicBlock::Create(Context,
+                                              F->getName()
+                                                + "__csv_restore_unwind",
+                                              F);
+
+  Type *ExnTy = StructType::get(Type::getInt8PtrTy(Context),
+                                Type::getInt32Ty(Context));
+  LandingPadInst *LPad = LandingPadInst::Create(ExnTy, 1, "lpad", UnwindEdge);
+  LPad->setCleanup(true);
+
+  Function *Root = M.getFunction("root");
+  F->setPersonalityFn(Root->getPersonalityFn());
+
+  // Propagate the exception to the callee.
+  // No need to call `_Unwind_RaiseException` again.
+  ResumeInst::Create(LPad, UnwindEdge);
+
+  UnwindEdgesMap[F] = UnwindEdge;
 }

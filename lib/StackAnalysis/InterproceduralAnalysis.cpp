@@ -716,7 +716,7 @@ FunctionsSummary ResultsPool::finalize(Module *M, Cache *TheCache) {
         //
 
         // Register status at the function
-        const FunctionRegisterArgument &FunctionStatus = FRA[TheFunctionSlot];
+        FunctionRegisterArgument FunctionStatus = FRA[TheFunctionSlot];
         auto Status = FunctionStatus.value();
         revng_assert(Status == FunctionRegisterArgument::Maybe
                      or Status == FunctionRegisterArgument::NoOrDead
@@ -724,25 +724,58 @@ FunctionsSummary ResultsPool::finalize(Module *M, Cache *TheCache) {
                      or Status == FunctionRegisterArgument::Yes
                      or Status == FunctionRegisterArgument::No);
 
-        // Propagate information from the function to callers (and record if for
-        // at least a call site we have Yes information before the merge)
+        // Check if at least a call site says yes
         bool AtLeastAYes = false;
-
         for (auto &Q : FCS.CallSites) {
           const CallSite &TheCallSite = Q.first;
           revng_assert(Q.second != nullptr);
           CallSiteDescription &TheCallSiteDescription = *Q.second;
           FunctionCallSlot FCS{ TheCallSite, Offset };
 
-          // Register status at current call site
           const FunctionCallRegisterArgument &CallerStatus = FCRA[FCS];
           auto Status = CallerStatus.value();
           revng_assert(Status == FunctionCallRegisterArgument::Maybe
                        or Status == FunctionCallRegisterArgument::Yes);
 
           // Register if there's at least a Yes
-          AtLeastAYes = (AtLeastAYes
-                         or Status == FunctionCallRegisterArgument::Yes);
+          if (Status == FunctionCallRegisterArgument::Yes) {
+            AtLeastAYes = true;
+            break;
+          }
+
+        }
+
+        if (AtLeastAYes) {
+          // Propagate the yes to the function
+          switch (FunctionStatus.value()) {
+          case FunctionRegisterArgument::Maybe:
+            FunctionStatus = FunctionRegisterArgument(FunctionRegisterArgument::Yes);
+            break;
+          case FunctionRegisterArgument::NoOrDead:
+            FunctionStatus = FunctionRegisterArgument(FunctionRegisterArgument::Dead);
+            break;
+          case FunctionRegisterArgument::Contradiction:
+          case FunctionRegisterArgument::Yes:
+          case FunctionRegisterArgument::No:
+            // Do nothing
+            break;
+          default:
+            revng_abort();
+          }
+        }
+
+        // Register the result for the argument of the function
+        P.second.RegisterSlots[CSV].Argument = FunctionStatus;
+
+        // Go over the call sites again and propagate from the result in the
+        // function to the call sites
+        for (auto &Q : FCS.CallSites) {
+          const CallSite &TheCallSite = Q.first;
+          revng_assert(Q.second != nullptr);
+          CallSiteDescription &TheCallSiteDescription = *Q.second;
+          FunctionCallSlot FCS{ TheCallSite, Offset };
+
+          const FunctionCallRegisterArgument &CallerStatus = FCRA[FCS];
 
           // Update the status at the call site, starting from the status of the
           // callee
@@ -754,6 +787,9 @@ FunctionsSummary ResultsPool::finalize(Module *M, Cache *TheCache) {
             break;
           case FunctionRegisterArgument::NoOrDead:
             Result = FCRegisterArgument(FCRegisterArgument::NoOrDead);
+            break;
+          case FunctionRegisterArgument::Dead:
+            Result = FCRegisterArgument(FCRegisterArgument::Dead);
             break;
           case FunctionRegisterArgument::Contradiction:
             Result = FCRegisterArgument(FCRegisterArgument::Contradiction);
@@ -769,7 +805,7 @@ FunctionsSummary ResultsPool::finalize(Module *M, Cache *TheCache) {
           }
 
           // If the callee doesn't say No and the caller says yes
-          if (not(FunctionStatus.value() == FunctionRegisterArgument::No)
+          if (FunctionStatus.value() != FunctionRegisterArgument::No
               and CallerStatus.value() == FCRegisterArgument::Yes) {
             // Promote caller using the Yes information
             switch (FunctionStatus.value()) {
@@ -779,6 +815,7 @@ FunctionsSummary ResultsPool::finalize(Module *M, Cache *TheCache) {
             case FunctionRegisterArgument::Maybe:
               Result = FCRegisterArgument(FCRegisterArgument::Yes);
               break;
+            case FunctionRegisterArgument::Dead:
             case FunctionRegisterArgument::Contradiction:
             case FunctionRegisterArgument::Yes:
               // Do nothing
@@ -788,35 +825,10 @@ FunctionsSummary ResultsPool::finalize(Module *M, Cache *TheCache) {
             }
           }
 
-          // In all other cases, no changes
-
           // Register the result
           TheCallSiteDescription.RegisterSlots[CSV].Argument = Result;
         }
 
-        // Propagate the information from callers to function
-        FunctionRegisterArgument Result = FunctionStatus;
-
-        if (AtLeastAYes) {
-          switch (FunctionStatus.value()) {
-          case FunctionRegisterArgument::Maybe:
-            Result = FunctionRegisterArgument(FunctionRegisterArgument::Yes);
-            break;
-          case FunctionRegisterArgument::NoOrDead:
-            Result = FunctionRegisterArgument(FunctionRegisterArgument::Dead);
-            break;
-          case FunctionRegisterArgument::Contradiction:
-          case FunctionRegisterArgument::Yes:
-          case FunctionRegisterArgument::No:
-            // Do nothing
-            break;
-          default:
-            revng_abort();
-          }
-        }
-
-        // Register the result for the argument of the function
-        P.second.RegisterSlots[CSV].Argument = Result;
       }
 
       {
