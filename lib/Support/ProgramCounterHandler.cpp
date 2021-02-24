@@ -51,6 +51,19 @@ public:
     return Builder.CreateLoad(AddressCSV);
   }
 
+  std::array<Value *, 4> dissectJumpablePC(IRBuilder<> &Builder,
+                                           Value *ToDissect,
+                                           Triple::ArchType Arch) const final {
+    IntegerType *Ty = getCSVType(TypeCSV);
+
+    Value *Address = ToDissect;
+    Value *Epoch = ConstantInt::get(Ty, 0);
+    Value *AddressSpace = ConstantInt::get(Ty, 0);
+    Value *Type = ConstantInt::get(Ty,
+                                   MetaAddressType::defaultCodeFromArch(Arch));
+    return { Address, Epoch, AddressSpace, Type };
+  }
+
   void deserializePCFromSignalContext(IRBuilder<> &Builder,
                                       Value *PCAddress,
                                       Value *SavedRegisters) const final {
@@ -109,24 +122,11 @@ private:
     revng_assert(affectsPC(Store));
 
     Value *Pointer = Store->getPointerOperand();
-    Value *StoredValue = Store->getValueOperand();
+    Value *ThumbValue = Store->getValueOperand();
 
     if (Pointer == IsThumb) {
-      // Update Type
-      using CI = ConstantInt;
-      using namespace MetaAddressType;
-
-      auto *TypeType = getCSVType(TypeCSV);
-      auto *ArmCode = CI::get(TypeType, Code_arm);
-      auto *ThumbCode = CI::get(TypeType, Code_arm_thumb);
-      // We don't use select here, SCEV can't handle it
-      // NewType = ARM + IsThumb * (Thumb - ARM)
-      auto *NewType = B.CreateAdd(ArmCode,
-                                  B.CreateMul(B.CreateTrunc(StoredValue,
-                                                            TypeType),
-                                              B.CreateSub(ThumbCode, ArmCode)));
-
-      B.CreateStore(NewType, TypeCSV);
+      // Compute Type and update it.
+      B.CreateStore(this->emitARMState(B, ThumbValue), TypeCSV);
 
       return true;
     }
@@ -140,6 +140,21 @@ private:
     return Builder.CreateOr(Address,
                             Builder.CreateZExt(Builder.CreateLoad(IsThumb),
                                                AddressType));
+  }
+
+  std::array<Value *, 4> dissectJumpablePC(IRBuilder<> &Builder,
+                                           Value *ToDissect,
+                                           Triple::ArchType Arch) const final {
+    constexpr uint32_t ThumbMask = 0x1;
+    constexpr uint32_t AddressMask = 0xFFFFFFFE;
+    IntegerType *Ty = getCSVType(TypeCSV);
+
+    Value *IsThumb = Builder.CreateAnd(ToDissect, ThumbMask);
+    Value *Address = Builder.CreateAnd(ToDissect, AddressMask);
+    Value *Epoch = ConstantInt::get(Ty, 0);
+    Value *AddressSpace = ConstantInt::get(Ty, 0);
+    Value *Type = this->emitARMState(Builder, IsThumb);
+    return { Address, Epoch, AddressSpace, Type };
   }
 
   void deserializePCFromSignalContext(IRBuilder<> &B,
@@ -168,6 +183,21 @@ private:
 
     // Update the PC address too
     B.CreateStore(PCAddress, AddressCSV);
+  }
+
+  Value *emitARMState(IRBuilder<> &B, Value *IsThumb) const {
+    using CI = ConstantInt;
+    using namespace MetaAddressType;
+
+    auto *TypeType = getCSVType(TypeCSV);
+    auto *ArmCode = CI::get(TypeType, Code_arm);
+    auto *ThumbCode = CI::get(TypeType, Code_arm_thumb);
+    // We don't use select here, SCEV can't handle it
+    // NewType = ARM + IsThumb * (Thumb - ARM)
+    auto *NewType = B.CreateAdd(ArmCode,
+                                B.CreateMul(B.CreateTrunc(IsThumb, TypeType),
+                                            B.CreateSub(ThumbCode, ArmCode)));
+    return NewType;
   }
 
 protected:

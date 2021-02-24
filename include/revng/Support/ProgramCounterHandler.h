@@ -165,6 +165,11 @@ public:
 
   virtual llvm::Value *loadJumpablePC(llvm::IRBuilder<> &Builder) const = 0;
 
+  virtual std::array<llvm::Value *, 4>
+  dissectJumpablePC(llvm::IRBuilder<> &Builder,
+                    llvm::Value *ToDissect,
+                    llvm::Triple::ArchType Arch) const = 0;
+
   virtual void
   deserializePCFromSignalContext(llvm::IRBuilder<> &Builder,
                                  llvm::Value *PCAddress,
