@@ -904,6 +904,10 @@ inline llvm::User *getUniqueUser(llvm::Value *V) {
   return Result;
 }
 
+/// \brief Find the first call to newpc starting from \p TheInstruction
+///
+llvm::CallInst *reverseNewPCTraversal(llvm::Instruction *TheInstruction);
+
 /// \brief Find the PC which lead to generated \p TheInstruction
 ///
 /// \return a pair of integers: the first element represents the PC and the
