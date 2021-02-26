@@ -907,7 +907,8 @@ inline std::string dumpToString(T &TheT) {
 }
 
 template<typename T>
-requires std::is_pointer_v<T> inline std::string dumpToString(T TheT) {
+requires std::is_pointer_v<T>
+inline std::string dumpToString(T TheT) {
   if (TheT == nullptr)
     return "nullptr";
   return dumpToString(*TheT);
@@ -941,6 +942,10 @@ inline llvm::User *getUniqueUser(llvm::Value *V) {
 
   return Result;
 }
+
+/// \brief Find the first call to newpc starting from \p TheInstruction
+///
+llvm::CallInst *reverseNewPCTraversal(llvm::Instruction *TheInstruction);
 
 /// \brief Find the PC which lead to generated \p TheInstruction
 ///
@@ -1141,4 +1146,10 @@ inline cppcoro::generator<llvm::CallBase *> callers(llvm::Function *F) {
       }
     }
   }
+}
+
+template<typename T>
+static llvm::cl::opt<T> *
+getOption(llvm::StringMap<llvm::cl::Option *> &Options, const char *Name) {
+  return static_cast<llvm::cl::opt<T> *>(Options[Name]);
 }

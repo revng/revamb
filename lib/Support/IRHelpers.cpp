@@ -72,8 +72,7 @@ Constant *getUniqueString(Module *M,
   return ConstantExpr::getBitCast(NewVariable, Int8PtrTy);
 }
 
-std::pair<MetaAddress, uint64_t> getPC(Instruction *TheInstruction) {
-  CallInst *NewPCCall = nullptr;
+CallInst *reverseNewPCTraversal(Instruction *TheInstruction) {
   std::set<BasicBlock *> Visited;
   std::queue<BasicBlock::reverse_iterator> WorkList;
 
@@ -91,41 +90,31 @@ std::pair<MetaAddress, uint64_t> getPC(Instruction *TheInstruction) {
     auto End = BB->rend();
 
     // Go through the instructions looking for calls to newpc
-    for (; I != End and NewPCCall == nullptr; I++) {
-      if (CallInst *Marker = getCallTo(&*I, "newpc")) {
-        // We found two distinct newpc leading to the requested instruction
-        if (NewPCCall != nullptr)
-          return { MetaAddress::invalid(), 0 };
-
-        NewPCCall = Marker;
-      }
-    }
+    for (; I != End; I++)
+      if (CallInst *Marker = getCallTo(&*I, "newpc"))
+        return Marker;
 
     // If we didn't find a newpc call yet, continue exploration backward
-    if (NewPCCall == nullptr) {
-      // If one of the predecessors is the dispatcher, don't explore any further
-      for (BasicBlock *Predecessor : predecessors(BB)) {
+    // If one of the predecessors is the dispatcher, don't explore any further
+    for (BasicBlock *Predecessor : predecessors(BB)) {
+      using GCBI = GeneratedCodeBasicInfo;
 
-        // Lazily detect dispatcher
-        using GCBI = GeneratedCodeBasicInfo;
-        bool PartOfDispatcher = GCBI::isPartOfRootDispatcher(Predecessor);
+      // Assert we didn't reach the almighty dispatcher
+      revng_assert(GCBI::isPartOfRootDispatcher(Predecessor) == false);
 
-        // Assert we didn't reach the almighty dispatcher
-        revng_assert(not(NewPCCall == nullptr and PartOfDispatcher));
-        if (PartOfDispatcher)
-          continue;
-      }
-
-      for (BasicBlock *Predecessor : predecessors(BB)) {
-        // Ignore already visited or empty BBs
-        if (!Predecessor->empty()
-            && Visited.find(Predecessor) == Visited.end()) {
-          WorkList.push(Predecessor->rbegin());
-          Visited.insert(Predecessor);
-        }
+      // Ignore already visited or empty BBs
+      if (!Predecessor->empty() && Visited.find(Predecessor) == Visited.end()) {
+        WorkList.push(Predecessor->rbegin());
+        Visited.insert(Predecessor);
       }
     }
   }
+
+  return nullptr;
+}
+
+std::pair<MetaAddress, uint64_t> getPC(Instruction *TheInstruction) {
+  CallInst *NewPCCall = reverseNewPCTraversal(TheInstruction);
 
   // Couldn't find the current PC
   if (NewPCCall == nullptr)

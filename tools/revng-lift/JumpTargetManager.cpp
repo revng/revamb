@@ -424,12 +424,6 @@ JumpTargetManager::readFromPointer(Constant *Pointer, BinaryFile::Endianess E) {
     return {};
 }
 
-template<typename T>
-static cl::opt<T> *
-getOption(StringMap<cl::Option *> &Options, const char *Name) {
-  return static_cast<cl::opt<T> *>(Options[Name]);
-}
-
 JumpTargetManager::JumpTargetManager(Function *TheFunction,
                                      ProgramCounterHandler *PCH,
                                      const BinaryFile &Binary,
