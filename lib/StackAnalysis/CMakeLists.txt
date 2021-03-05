@@ -54,6 +54,7 @@ revng_add_analyses_library_internal(revngStackAnalysis
   IncoherentCallsAnalysis.cpp
   InterproceduralAnalysis.cpp
   Intraprocedural.cpp
+  PromoteGlobalToLocalVars.cpp
   StackAnalysis.cpp)
 
 target_link_libraries(revngStackAnalysis
