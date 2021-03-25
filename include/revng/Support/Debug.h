@@ -23,6 +23,13 @@ extern size_t MaxLoggerNameLength;
 
 #define debug_function __attribute__((used, noinline))
 
+/// \brief Emits Indents "\t" to the provided stream
+template<typename OStream>
+void indent(OStream &OS, size_t Indents) {
+  for (size_t I = 0; I < Indents; I++)
+    OS << "\t";
+}
+
 /// \brief Stream an instance of this class to call Logger::emit()
 struct LogTerminator {
   const char *File;
