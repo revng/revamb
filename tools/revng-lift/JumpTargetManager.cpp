@@ -22,6 +22,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/MDBuilder.h"
+#include "llvm/IR/PassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Transforms/InstCombine/InstCombine.h"
@@ -35,6 +36,7 @@
 
 #include "revng/ADT/Queue.h"
 #include "revng/BasicAnalyses/AdvancedValueInfo.h"
+#include "revng/BasicAnalyses/CSVAliasAnalysis.h"
 #include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/BasicAnalyses/ShrinkInstructionOperandsPass.h"
 #include "revng/Support/Assert.h"
@@ -1221,91 +1223,6 @@ public:
   }
 };
 
-void JumpTargetManager::aliasAnalysis() {
-  unsigned AliasScopeMDKindID = TheModule.getMDKindID("alias.scope");
-  unsigned NoAliasMDKindID = TheModule.getMDKindID("noalias");
-
-  LLVMContext &Context = TheModule.getContext();
-  QuickMetadata QMD(Context);
-  MDBuilder MDB(Context);
-  MDNode *CSVDomain = MDB.createAliasScopeDomain("CSVAliasDomain");
-
-  struct CSVAliasInfo {
-    MDNode *AliasScope;
-    MDNode *AliasSet;
-    MDNode *NoAliasSet;
-  };
-  std::map<const GlobalVariable *, CSVAliasInfo> CSVAliasInfoMap;
-
-  std::set<GlobalVariable *> CSVs;
-  NamedMDNode *NamedMD = TheModule.getOrInsertNamedMetadata("revng.csv");
-  auto *Tuple = cast<MDTuple>(NamedMD->getOperand(0));
-  for (const MDOperand &Operand : Tuple->operands()) {
-    auto *CSV = cast<GlobalVariable>(QMD.extract<Constant *>(Operand.get()));
-    CSVs.insert(CSV);
-  }
-
-  for (GlobalVariable *PCCSV : PCH->pcCSVs())
-    CSVs.insert(PCCSV);
-
-  // Build alias scopes
-  std::vector<Metadata *> AllCSVScopes;
-  for (const GlobalVariable *CSV : CSVs) {
-    CSVAliasInfo &AliasInfo = CSVAliasInfoMap[CSV];
-
-    std::string Name = CSV->getName();
-    MDNode *CSVScope = MDB.createAliasScope(Name, CSVDomain);
-    AliasInfo.AliasScope = CSVScope;
-    AllCSVScopes.push_back(CSVScope);
-    MDNode *CSVAliasSet = MDNode::get(Context,
-                                      ArrayRef<Metadata *>({ CSVScope }));
-    AliasInfo.AliasSet = CSVAliasSet;
-  }
-  MDNode *MemoryAliasSet = MDNode::get(Context, AllCSVScopes);
-
-  // Build noalias sets
-  for (const GlobalVariable *CSV : CSVs) {
-    CSVAliasInfo &AliasInfo = CSVAliasInfoMap[CSV];
-    std::vector<Metadata *> OtherCSVScopes;
-    for (const auto &Q : CSVAliasInfoMap)
-      if (Q.first != CSV)
-        OtherCSVScopes.push_back(Q.second.AliasScope);
-
-    MDNode *CSVNoAliasSet = MDNode::get(Context, OtherCSVScopes);
-    AliasInfo.NoAliasSet = CSVNoAliasSet;
-  }
-
-  // Decorate the IR with alias information
-  for (Function &F : TheModule) {
-    for (BasicBlock &BB : F) {
-      for (Instruction &I : BB) {
-        Value *Ptr = nullptr;
-
-        if (auto *L = dyn_cast<LoadInst>(&I))
-          Ptr = L->getPointerOperand();
-        else if (auto *S = dyn_cast<StoreInst>(&I))
-          Ptr = S->getPointerOperand();
-        else
-          continue;
-
-        // Check if the pointer is a CSV
-        if (auto *GV = dyn_cast<GlobalVariable>(Ptr)) {
-          auto It = CSVAliasInfoMap.find(GV);
-          if (It != CSVAliasInfoMap.end()) {
-            // Set alias.scope and noalias metadata
-            I.setMetadata(AliasScopeMDKindID, It->second.AliasSet);
-            I.setMetadata(NoAliasMDKindID, It->second.NoAliasSet);
-            continue;
-          }
-        }
-
-        // It's not a CSV memory access, set noalias info
-        I.setMetadata(NoAliasMDKindID, MemoryAliasSet);
-      }
-    }
-  }
-}
-
 namespace TrackedInstructionType {
 
 enum Values { Invalid, WrittenInPC, StoredInMemory, StoreTarget, LoadTarget };
@@ -1637,7 +1554,27 @@ void JumpTargetManager::harvestWithAVI() {
   //
   // Update alias analysis
   //
-  aliasAnalysis();
+  {
+    FunctionAnalysisManager FAM;
+    ModuleAnalysisManager MAM;
+    MAM.registerPass([&] { return GeneratedCodeBasicInfoAnalysis(); });
+    MAM.registerPass([&] { return FunctionAnalysisManagerModuleProxy(FAM); });
+    FAM.registerPass([&] { return ModuleAnalysisManagerFunctionProxy(MAM); });
+
+    ModulePassManager MPM;
+    MPM.addPass(RequireAnalysisPass<GeneratedCodeBasicInfoAnalysis, Module>());
+    {
+      FunctionPassManager FPM;
+      FPM.addPass(CSVAliasAnalysisPass());
+      MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+    }
+
+    PassBuilder PB;
+    PB.registerModuleAnalyses(MAM);
+    PB.registerFunctionAnalyses(FAM);
+
+    MPM.run(*M, MAM);
+  }
 
   //
   // Optimize the hell out of it and collect the possible values of indirect

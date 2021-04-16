@@ -13,11 +13,30 @@
 #include <vector>
 
 #include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/Analysis/ScopedNoAliasAA.h"
+#include "llvm/CodeGen/UnreachableBlockElim.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
-#include "llvm/Pass.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Verifier.h"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar/EarlyCSE.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Scalar/JumpThreading.h"
+#include "llvm/Transforms/Scalar/MergedLoadStoreMotion.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
+#include "llvm/Transforms/Utils.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/CodeExtractor.h"
+#include "llvm/Transforms/Utils/Mem2Reg.h"
 
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/ADT/Queue.h"
+#include "revng/BasicAnalyses/CSVAliasAnalysis.h"
+#include "revng/BasicAnalyses/PromoteGlobalToLocalVars.h"
+#include "revng/BasicAnalyses/RemoveHelperCalls.h"
+#include "revng/BasicAnalyses/RemoveNewPCCalls.h"
 #include "revng/Model/Binary.h"
 #include "revng/StackAnalysis/StackAnalysis.h"
 #include "revng/Support/CommandLine.h"
@@ -31,6 +50,10 @@ using llvm::BasicBlock;
 using llvm::Function;
 using llvm::Module;
 using llvm::RegisterPass;
+
+using FunctionEdgeTypeValue = model::FunctionEdgeType::Values;
+using FunctionTypeValue = model::FunctionType::Values;
+using GCBI = GeneratedCodeBasicInfo;
 
 static Logger<> ClobberedLog("clobbered");
 static Logger<> StackAnalysisLog("stackanalysis");
@@ -305,6 +328,474 @@ void commitToModel(GeneratedCodeBasicInfo &GCBI,
   revng_check(TheBinary.verify());
 }
 
+template<class FunctionOracle>
+FuncSummary CFEPAnalyzer<FunctionOracle>::analyze(
+  const std::vector<llvm::GlobalVariable *> &ABIRegs,
+  llvm::BasicBlock *Entry) {
+  using namespace llvm;
+
+  Value *RA = nullptr;
+  const auto *PCH = GCBI->programCounterHandler();
+  Function *OutFunc = createDisposableFunction(Entry);
+
+  // Identify the callee-saved registers and tell if a function is jumping
+  // to the return address. To achieve this, we craft the IR by loading the PC,
+  // the SP, as well as the ABI registers CSVs at function entry and end.
+  IRBuilder<> Builder(&OutFunc->getEntryBlock().front());
+  auto *IntPtrTy = GCBI->spReg()->getType();
+  auto *IntTy = GCBI->spReg()->getType()->getElementType();
+
+  auto *SP = Builder.CreateLoad(
+    M.getGlobalVariable(GCBI->spReg()->getName(), true));
+  auto *SPPtr = Builder.CreateIntToPtr(SP, IntPtrTy);
+  auto *GEPI = Builder.CreateGEP(IntTy, SPPtr, ConstantInt::get(IntTy, 0));
+
+  switch (GCBI->arch()) {
+  case Triple::arm: {
+    constexpr auto *LinkRegister = "r14";
+    RA = Builder.CreateLoad(M.getGlobalVariable(LinkRegister, true));
+    break;
+  }
+
+  case Triple::aarch64: {
+    constexpr auto *LinkRegister = "x30";
+    RA = Builder.CreateLoad(M.getGlobalVariable(LinkRegister, true));
+    break;
+  };
+
+  case Triple::mips:
+  case Triple::mipsel: {
+    constexpr auto *ReturnRegister = "ra";
+    RA = Builder.CreateLoad(M.getGlobalVariable(ReturnRegister, true));
+    break;
+  }
+
+  case Triple::systemz: {
+    constexpr auto *ReturnRegister = "r14";
+    RA = Builder.CreateLoad(M.getGlobalVariable(ReturnRegister, true));
+    break;
+  }
+
+  case Triple::x86:
+  case Triple::x86_64: {
+    RA = Builder.CreateLoad(SPPtr);
+    break;
+  }
+
+  default:
+    revng_abort("Unsupported architecture");
+  }
+
+  std::array<Value *, 4> DissectedPC = PCH->dissectJumpablePC(Builder,
+                                                              RA,
+                                                              GCBI->arch());
+
+  auto *PCI = MetaAddress::composeIntegerPC(Builder,
+                                            DissectedPC[0],
+                                            DissectedPC[1],
+                                            DissectedPC[2],
+                                            DissectedPC[3]);
+
+  SmallVector<Value *, 8> CSVI;
+  for (auto *CSR : ABIRegs) {
+    auto *V = Builder.CreateLoad(M.getGlobalVariable(CSR->getName(), true));
+    CSVI.emplace_back(V);
+  }
+
+  Instruction *Last = nullptr;
+  SmallVector<Instruction *, 4> Returns;
+  for (auto &BB : *OutFunc)
+    if (auto *Ret = dyn_cast<ReturnInst>(&BB.back()))
+      Last = Ret;
+
+  if (Last) {
+    for (auto *Pred : predecessors(Last->getParent())) {
+      auto *Term = Pred->getTerminator();
+      Builder.SetInsertPoint(Term);
+
+      auto *PCE = PCH->composeIntegerPC(Builder);
+
+      SmallVector<Value *, 8> CSVE;
+      for (auto *CSR : ABIRegs) {
+        auto *V = Builder.CreateLoad(M.getGlobalVariable(CSR->getName(), true));
+        CSVE.emplace_back(V);
+      }
+
+      SP = Builder.CreateLoad(
+        M.getGlobalVariable(GCBI->spReg()->getName(), true));
+      SPPtr = Builder.CreateIntToPtr(SP, IntPtrTy);
+      auto *GEPE = Builder.CreateGEP(IntTy, SPPtr, ConstantInt::get(IntTy, 0));
+
+      auto *SPI = Builder.CreatePtrToInt(GEPI, IntTy);
+      auto *SPE = Builder.CreatePtrToInt(GEPE, IntTy);
+
+      // Compute the difference between the return address and the program
+      // counter.
+      auto *IsRet = Builder.CreateSub(PCE, PCI);
+
+      // Compute the difference between the stack pointer values to evaluate the
+      // stack height, and the difference between the CSR values as well.
+      // Functions leaving the stack pointer higher than it was at function
+      // entry (i.e., in an irregular state) are marked as fake functions.
+      auto *SPDiff = Builder.CreateSub(SPE, SPI);
+
+      Type *RetTy = Type::getInt128Ty(Context);
+      SmallVector<Type *, 8> ArgTypes = { RetTy, IntTy };
+      SmallVector<Value *, 8> ArgValues = { IsRet, SPDiff };
+      for (unsigned I = 0; I < CSVI.size(); ++I) {
+        auto *V = Builder.CreateSub(CSVE[I], CSVI[I]);
+        ArgTypes.emplace_back(IntTy);
+        ArgValues.emplace_back(V);
+      }
+
+      OFPIndirectBranchInfo.addFnAttribute(Attribute::NoUnwind);
+      OFPIndirectBranchInfo.addFnAttribute(Attribute::NoReturn);
+
+      auto *OpqFunc = OFPIndirectBranchInfo
+                        .get(Last->getParent()->getParent()->getName(),
+                             IntTy,
+                             ArgTypes,
+                             "indirect_branch_info");
+
+      // Is jumping to the return address? What is the stack height?
+      // What are the callee-saved registers? Where do we come from?
+      auto *Call = Builder.CreateCall(OpqFunc, ArgValues);
+      Builder.CreateUnreachable();
+
+      IndirectBranchInfoCalls.emplace_back(Call);
+      Returns.emplace_back(Term);
+    }
+  }
+
+  for (auto *I : Returns)
+    I->eraseFromParent();
+
+  for (auto *I : IndirectBranchInfoCalls) {
+    auto *NewPCCall = reverseNewPCTraversal(I);
+    MetaAddress NewPC = GCBI::getPCFromNewPC(NewPCCall);
+    Builder.SetInsertPoint(NewPCCall);
+    PCH->setPC(Builder, NewPC);
+  }
+
+  // Run optimization passes over the disposable function
+  {
+    FunctionPassManager FPM;
+
+    // First stage: simplify the IR and resolve redundant
+    // expressions in order to compute the stack height.
+    FPM.addPass(RemoveNewPCCallsPass());
+    FPM.addPass(RemoveHelperCallsPass());
+    FPM.addPass(PromotePass());
+    FPM.addPass(JumpThreadingPass());
+    FPM.addPass(UnreachableBlockElimPass());
+    FPM.addPass(InstCombinePass(false));
+    FPM.addPass(EarlyCSEPass(true));
+    FPM.addPass(SimplifyCFGPass());
+    FPM.addPass(MergedLoadStoreMotionPass());
+    FPM.addPass(GVN());
+
+    // Second stage: add alias analysis info, perform the GEP
+    // transformation and promote CSVs to local variables.
+    // Since the IR may change remarkably, another round of passes
+    // is necessary to take more optimization opportunities.
+    FPM.addPass(CSVAliasAnalysisPass<true>());
+    FPM.addPass(PromoteGlobalToLocalPass());
+    FPM.addPass(PromotePass());
+    FPM.addPass(InstCombinePass(false));
+    FPM.addPass(EarlyCSEPass(true));
+    FPM.addPass(InstCombinePass(false));
+
+    FunctionAnalysisManager FAM;
+    FAM.registerPass([] {
+      AAManager AA;
+      AA.registerFunctionAnalysis<BasicAA>();
+      AA.registerFunctionAnalysis<ScopedNoAliasAA>();
+
+      return AA;
+    });
+
+    ModuleAnalysisManager MAM;
+    MAM.registerPass([&] { return GeneratedCodeBasicInfoAnalysis(); });
+    FAM.registerPass([&] { return GeneratedCodeBasicInfoAnalysis(); });
+    FAM.registerPass([&] { return ModuleAnalysisManagerFunctionProxy(MAM); });
+
+    PassBuilder PB;
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerModuleAnalyses(MAM);
+
+    FPM.run(*OutFunc, FAM);
+  }
+
+  FuncSummary FunctionInfo = milkResults(ABIRegs, OutFunc);
+
+  // Is the disposable function a FakeFunction? If so, return a
+  // copy of the unoptimized disposable function.
+  if (FunctionInfo.Type == FunctionTypeValue::Fake)
+    FunctionInfo.FakeFunction = createDisposableFunction(Entry);
+
+  // Discard it, no longer needed.
+  throwDisposableFunction(OutFunc);
+  return FunctionInfo;
+}
+
+template<class FunctionOracle>
+FuncSummary CFEPAnalyzer<FunctionOracle>::milkResults(
+  const std::vector<llvm::GlobalVariable *> &ABIRegs,
+  llvm::Function *F) {
+  using namespace llvm;
+
+  SmallVector<std::pair<CallInst *, uint64_t>, 4> MaybeReturns;
+  SmallSet<std::pair<CallInst *, FunctionEdgeTypeValue>, 4> Result;
+  std::set<GlobalVariable *> CalleeSavedRegs(ABIRegs.begin(), ABIRegs.end());
+  std::set<GlobalVariable *> ClobberedRegs(ABIRegs.begin(), ABIRegs.end());
+
+  for (auto *I : IndirectBranchInfoCalls) {
+    if (isa<ConstantInt>(I->getArgOperand(0))) {
+      if (isa<ConstantInt>(I->getArgOperand(1))) {
+        uint64_t FSO = cast<ConstantInt>(I->getArgOperand(1))->getZExtValue();
+        if (FSO >= 0)
+          MaybeReturns.emplace_back(I, FSO);
+      } else {
+        Result.insert({ I, FunctionEdgeTypeValue::BrokenReturn });
+      }
+    }
+  }
+
+  // Elect a final stack offset.
+  auto WinFSO = [&MaybeReturns]() -> std::optional<uint64_t> {
+    auto It = std::min_element(MaybeReturns.begin(),
+                               MaybeReturns.end(),
+                               [](const auto &LHS, const auto &RHS) {
+                                 return LHS.second < RHS.second;
+                               });
+    if (It == MaybeReturns.end())
+      return {};
+    return It->second;
+  }();
+
+  // Did we find a valid return instruction?
+  for (const auto &E : MaybeReturns) {
+    auto *CI = E.first;
+    std::set<GlobalVariable *> TempCSR;
+    if (E.second == *WinFSO) {
+      Result.insert({ E.first, FunctionEdgeTypeValue::Return });
+      unsigned NumArgs = CI->getNumArgOperands();
+      if (NumArgs > 2) {
+        for (unsigned Idx = 2; Idx < NumArgs; ++Idx) {
+          if (isa<ConstantInt>(CI->getArgOperand(Idx))) {
+            TempCSR.insert(ABIRegs[Idx - 2]);
+          }
+        }
+      }
+
+      std::erase_if(CalleeSavedRegs, [&](const auto &E) {
+        return TempCSR.find(E) == TempCSR.end();
+      });
+    } else {
+      Result.insert({ E.first, FunctionEdgeTypeValue::BrokenReturn });
+    }
+  }
+
+  // Neither a return nor a broken return?
+  for (auto *I : IndirectBranchInfoCalls) {
+    if (isa<ConstantInt>(I->getArgOperand(0)))
+      continue;
+
+    if (WinFSO.has_value() && (isa<ConstantInt>(I->getArgOperand(1)))
+        && (cast<ConstantInt>(I->getArgOperand(1))->getZExtValue() == *WinFSO))
+      Result.insert({ I, FunctionEdgeTypeValue::IndirectTailCall });
+    else
+      Result.insert({ I, FunctionEdgeTypeValue::LongJmp });
+  }
+
+  bool FoundRet, FoundBrokenRet;
+  FoundRet = FoundBrokenRet = false;
+  for (const auto &E : Result) {
+    if (E.second == FunctionEdgeTypeValue::Return)
+      FoundRet = true;
+    if (E.second == FunctionEdgeTypeValue::BrokenReturn)
+      FoundBrokenRet = true;
+  }
+
+  FunctionTypeValue Type;
+  if (FoundRet) {
+    Type = FunctionTypeValue::Regular;
+  } else if (FoundBrokenRet) {
+    Type = FunctionTypeValue::Fake;
+  } else {
+    Type = FunctionTypeValue::NoReturn;
+  }
+
+  // Finally retrieve the clobbered registers and return them.
+  std::erase_if(ClobberedRegs, [&](const auto &E) {
+    return CalleeSavedRegs.find(E) != CalleeSavedRegs.end();
+  });
+
+  return FuncSummary(Type, ClobberedRegs, Result, WinFSO);
+}
+
+template<class FunctionOracle>
+llvm::BasicBlock *
+CFEPAnalyzer<FunctionOracle>::integrateFunctionCallee(llvm::BasicBlock *BB) {
+  using namespace llvm;
+
+  // In case the basic block has a call-site, the function call is
+  // replaced with i) hooks that facilitate the ABI analysis ii) summary
+  // of the registers clobbered by that function. The newly created basic block
+  // is returned so that it can be added to the ValueToValueMap.
+  BasicBlock *Split = nullptr;
+  auto *Term = BB->getTerminator();
+  auto *Call = getFunctionCall(Term);
+
+  // If the successor is null, we are dealing with an indirect call.
+  auto *Next = getFunctionCallCallee(Term);
+
+  // What are the registers clobbered by the callee?
+  const auto &ClobberedRegs = Oracle.getRegistersClobbered(Next);
+
+  // What is the function type of the callee?
+  FunctionTypeValue Ty = Oracle.getFunctionType(Next);
+
+  switch (Ty) {
+  case FunctionTypeValue::Regular: {
+    BranchInst *Br = BranchInst::Create(getFallthrough(Term));
+    ReplaceInstWithInst(Term, Br);
+
+    auto *FTy = llvm::FunctionType::get(llvm::Type::getVoidTy(Context), false);
+    auto *PreHookOpqF = OFPHooksFunctionCall.get("__precall_pure_function",
+                                                 FTy,
+                                                 "precall_hook");
+    auto *Last = CallInst::Create(PreHookOpqF, "", Br);
+
+    Split = BB->splitBasicBlock(Last->getPrevNode(),
+                                BB->getName() + Twine("__summary"));
+
+    // Prevent the store instructions from being optimized out by storing
+    // the rval of a call to an opaque function into the clobbered registers.
+    OFPRegistersClobbered.addFnAttribute(Attribute::ReadOnly);
+    OFPRegistersClobbered.addFnAttribute(Attribute::NoUnwind);
+
+    for (GlobalVariable *Reg : ClobberedRegs) {
+      auto *CSVTy = Reg->getType()->getPointerElementType();
+      auto *RegsClobbOpqF = OFPRegistersClobbered
+                              .get(BB->getParent()->getName(),
+                                   CSVTy,
+                                   {},
+                                   "registers_clobbered");
+      new StoreInst(CallInst::Create(RegsClobbOpqF, "", Br), Reg, Br);
+    }
+
+    auto *PostHookOpqF = OFPHooksFunctionCall.get("__postcall_pure_function",
+                                                  FTy,
+                                                  "postcall_hook");
+    CallInst::Create(PostHookOpqF, "", Split->getTerminator());
+    break;
+  }
+
+  case FunctionTypeValue::NoReturn: {
+    ReturnInst *Ret = ReturnInst::Create(Context);
+    ReplaceInstWithInst(Term, Ret);
+    break;
+  }
+
+  case FunctionTypeValue::Fake: {
+    BranchInst *Br = BranchInst::Create(getFallthrough(Term));
+
+    // Get the fake function by its entry basic block.
+    Function *FakeFunction = Oracle.getFakeFunction(Next);
+
+    // Must have already been analyzed.
+    revng_assert(FakeFunction != nullptr);
+
+    // If possible, inline the fake function.
+    auto *CI = CallInst::Create(FakeFunction, "", Term);
+    InlineFunctionInfo IFI;
+    bool Status = InlineFunction(llvm::CallSite(CI), IFI, nullptr, true);
+
+    // Still need to replace the successor with the fall-through.
+    ReplaceInstWithInst(Term, Br);
+    break;
+  }
+
+  default:
+    revng_abort();
+  }
+
+  Call->eraseFromParent();
+  return Split;
+}
+
+template<class FunctionOracle>
+llvm::Function *CFEPAnalyzer<FunctionOracle>::createDisposableFunction(
+  llvm::BasicBlock *Entry) {
+  using namespace llvm;
+  Function *Root = Entry->getParent();
+
+  OnceQueue<BasicBlock *> Queue;
+  std::vector<BasicBlock *> BlocksToClone;
+  Queue.insert(Entry);
+
+  while (!Queue.empty()) {
+    BasicBlock *Current = Queue.pop();
+
+    BlocksToClone.emplace_back(Current);
+
+    if (isFunctionCall(Current)) {
+      auto *Succ = getFallthrough(Current);
+      revng_assert(Succ != nullptr);
+      Queue.insert(Succ);
+      continue;
+    }
+
+    for (auto *Succ : successors(Current)) {
+      if (!GCBI::isPartOfRootDispatcher(Succ))
+        Queue.insert(Succ);
+    }
+  }
+
+  ValueToValueMapTy VMap;
+  SmallVector<BasicBlock *, 8> BlocksToExtract;
+
+  for (const auto &BB : BlocksToClone) {
+    auto *Cloned = CloneBasicBlock(BB, VMap, Twine("__cloned"), Root);
+
+    BasicBlock *New = nullptr;
+    if (isFunctionCall(Cloned)) {
+      New = integrateFunctionCallee(Cloned);
+      VMap[Cloned] = New;
+    }
+
+    VMap[BB] = Cloned;
+    BlocksToExtract.emplace_back(Cloned);
+    if (New)
+      BlocksToExtract.emplace_back(New);
+  }
+
+  remapInstructionsInBlocks(BlocksToExtract, VMap);
+
+  CodeExtractorAnalysisCache CEAC(*Root);
+  Function *OutlinedFunction = CodeExtractor(BlocksToExtract)
+                                 .extractCodeRegion(CEAC);
+
+  revng_assert(OutlinedFunction != nullptr);
+  revng_assert(OutlinedFunction->arg_size() == 0);
+  revng_assert(OutlinedFunction->getReturnType()->isVoidTy());
+
+  cast<Instruction>(*OutlinedFunction->user_begin())
+    ->getParent()
+    ->eraseFromParent();
+
+  return OutlinedFunction;
+}
+
+template<class FunctionOracle>
+void CFEPAnalyzer<FunctionOracle>::throwDisposableFunction(llvm::Function *F) {
+  revng_assert(F->use_empty()
+               && "Failed to remove all users of the outlined function.");
+  F->eraseFromParent();
+  F = nullptr;
+}
+
 bool StackAnalysis::runOnModule(Module &M) {
   Function &F = *M.getFunction("root");
 
@@ -362,6 +853,27 @@ bool StackAnalysis::runOnModule(Module &M) {
     revng_log(CFEPLog,
               getName(Function.Entry) << (Function.Force ? " (forced)" : ""));
   }
+
+  // Collect all the ABI registers.
+  std::vector<llvm::GlobalVariable *> ABIRegisters;
+  for (auto *CSV : GCBI.abiRegisters())
+    if (CSV && !(GCBI.isSPReg(CSV)))
+      ABIRegisters.emplace_back(CSV);
+
+  // Isolate function starting from the collected entrypoints
+  // and analyze them.
+  using CFEPA = CFEPAnalyzer<FunctionProperties>;
+  FunctionProperties Properties;
+
+  for (CFEP &Function :
+       llvm::make_range(Functions.rbegin(), Functions.rend())) {
+    CFEPA Analyzer(M, &GCBI, Properties);
+    Properties.registerFunc(Function.Entry,
+                            Analyzer.analyze(ABIRegisters, Function.Entry));
+  }
+
+  // Still OK?
+  revng_assert(llvm::verifyModule(M, &llvm::dbgs()) == false);
 
   // Initialize the cache where all the results will be accumulated
   Cache TheCache(&F, &GCBI);
@@ -443,7 +955,10 @@ bool StackAnalysis::runOnModule(Module &M) {
     serialize(pathToStream(ABIAnalysisOutputPath, Output));
   }
 
+#if 0
+  // TODO: fix assert
   commitToModel(GCBI, &F, GrandResult, LMP.getWriteableModel());
+#endif
 
   return false;
 }
