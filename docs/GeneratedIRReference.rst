@@ -138,7 +138,7 @@ example program we have three program headers of 56 bytes, loaded at
 
     @.elfheaderhelper = constant i8 0, section ".elfheaderhelper", align 1
     @e_phentsize = constant i64 56
-    @e_phnum = constant i64 3
+    @e_phnum = constant i64 7
     @phdr_address = constant i64 4194368
 
 
@@ -166,7 +166,7 @@ Here's how this information appears in our example:
 
 .. code-block:: llvm
 
-    !revng.input.architecture = !{!0}
+    !revng.input.architecture = !{!1}
     !1 = !{!"x86_64", i32 1, i32 0, !"pc", !"rsp", !2}
     !2 = !{!"rax", !"rbx", !"rcx", !"rdx", !"rbp", ... }
 
@@ -486,7 +486,7 @@ rev.ng can identify function boundaries and function arguments:
 
 .. code-block:: sh
 
-   revng opt -S example.ll -detect-function-boundaries -detect-abi -o example.functions.ll
+   revng opt -S example.ll -detect-abi -o example.functions.ll
 
 This information is encoded in the generated module by associating two types of
 metadata (``revng.func.entry`` and ``revng.func.member.of``) to the terminator
@@ -600,7 +600,7 @@ function isolation pass using the appropriate pass:
 
 .. code-block:: sh
 
-    revng opt -S example.ll -isolate -invoke-isolated-functions -o example.isolated.ll
+    revng opt -S example.ll -detect-abi -isolate -invoke-isolated-functions -o example.isolated.ll
 
 As you can see by comparing the original IR and the one to which the function
 isolation pass has been applied the main difference is that, on the basis of the
