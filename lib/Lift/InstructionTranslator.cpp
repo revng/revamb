@@ -19,6 +19,9 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Casting.h"
 
+#include "revng/Lift/InstructionTranslator.h"
+#include "revng/Lift/PTCInterface.h"
+#include "revng/Lift/VariableManager.h"
 #include "revng/Support/Assert.h"
 #include "revng/Support/FunctionTags.h"
 #include "revng/Support/IRHelpers.h"

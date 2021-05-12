@@ -6,6 +6,8 @@
 
 #include <set>
 
+#include "revng/Support/Assert.h"
+
 template<bool StaticallyEnabled>
 class Logger;
 

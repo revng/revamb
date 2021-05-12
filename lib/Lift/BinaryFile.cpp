@@ -25,10 +25,9 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/LEB128.h"
 
+#include "revng/Lift/BinaryFile.h"
 #include "revng/Support/CommandLine.h"
 #include "revng/Support/Debug.h"
-
-#include "BinaryFile.h"
 
 // using directives
 using namespace llvm;
