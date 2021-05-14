@@ -206,9 +206,19 @@ BinaryFile::BinaryFile(std::string FilePath, uint64_t PreferedBaseAddress) :
   EntryPoint(MetaAddress::invalid()), BaseAddress(0) {
   auto BinaryOrErr = object::createBinary(FilePath);
   revng_check(BinaryOrErr, "Couldn't open the input file");
-
   BinaryHandle = std::move(BinaryOrErr.get());
+  initialize(PreferedBaseAddress);
+}
 
+BinaryFile::BinaryFile(BinaryHandleT BinaryHandle,
+                       uint64_t PreferedBaseAddress) :
+  BinaryHandle(std::move(BinaryHandle)),
+  EntryPoint(MetaAddress::invalid()),
+  BaseAddress(0) {
+  initialize(PreferedBaseAddress);
+}
+
+void BinaryFile::initialize(uint64_t PreferedBaseAddress) {
   auto *TheBinary = cast<object::ObjectFile>(BinaryHandle.getBinary());
 
   // TODO: QEMU should provide this information

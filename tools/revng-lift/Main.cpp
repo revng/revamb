@@ -147,16 +147,7 @@ static int loadPTCLibrary(LibraryPointer &PTCLibrary) {
   return EXIT_SUCCESS;
 }
 
-int main(int argc, const char *argv[]) {
-  // Enable LLVM stack trace
-  llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
-
-  HideUnrelatedOptions({ &MainCategory });
-  ParseCommandLineOptions(argc, argv);
-  installStatistics();
-
-  revng_check(BaseAddress % 4096 == 0, "Base address is not page aligned");
-
+static int lift(const string &InputPath) {
   BinaryFile TheBinary(InputPath, BaseAddress);
 
   findFiles(TheBinary.architecture().name());
@@ -179,6 +170,18 @@ int main(int argc, const char *argv[]) {
   if (EntryPointAddress.getNumOccurrences() != 0)
     EntryPointAddressOptional = EntryPointAddress;
   Generator.translate(EntryPointAddressOptional);
-
   return EXIT_SUCCESS;
+}
+
+int main(int argc, const char *argv[]) {
+  // Enable LLVM stack trace
+  llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
+
+  HideUnrelatedOptions({ &MainCategory });
+  ParseCommandLineOptions(argc, argv);
+  installStatistics();
+
+  revng_check(BaseAddress % 4096 == 0, "Base address is not page aligned");
+
+  return lift(InputPath);
 }

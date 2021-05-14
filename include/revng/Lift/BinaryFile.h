@@ -447,12 +447,14 @@ public:
   using LabelList = llvm::SmallVector<Label *, 6u>;
 
   using LabelIntervalMap = interval_map<MetaAddress, LabelList, compareAddress>;
+  using BinaryHandleT = llvm::object::OwningBinary<llvm::object::Binary>;
 
   enum Endianess { OriginalEndianess, BigEndian, LittleEndian };
 
 public:
   /// \param FilePath the path to the input file.
   BinaryFile(std::string FilePath, uint64_t BaseAddress);
+  BinaryFile(BinaryHandleT BinaryHandle, uint64_t BaseAddress);
 
   BinaryFile(const BinaryFile &) = delete;
   BinaryFile &operator=(BinaryFile &&) = default;
@@ -657,7 +659,9 @@ private:
   }
 
 private:
-  llvm::object::OwningBinary<llvm::object::Binary> BinaryHandle;
+  void initialize(uint64_t PreferedBaseAddress);
+
+  BinaryHandleT BinaryHandle;
   Architecture TheArchitecture;
   std::vector<SegmentInfo> Segments;
   std::vector<std::string> NeededLibraryNames;
