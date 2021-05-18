@@ -504,10 +504,7 @@ IT::InstructionTranslator(IRBuilder<> &Builder,
   FunctionTags::Marker.addTo(NewPCMarker);
 }
 
-void IT::finalizeNewPCMarkers(std::string &CoveragePath) {
-  std::ofstream Output(CoveragePath);
-
-  Output << std::hex;
+void IT::finalizeNewPCMarkers() {
   size_t FixedArgCount = NewPCMarker->arg_size();
 
   llvm::SmallVector<CallInst *, 4> CallsToRemove;
@@ -519,8 +516,6 @@ void IT::finalizeNewPCMarkers(std::string &CoveragePath) {
     auto PC = MetaAddress::fromConstant(Call->getArgOperand(0));
     uint64_t Size = getLimitedValue(Call->getArgOperand(1));
     bool IsJT = JumpTargets.isJumpTarget(PC);
-    PC.dump(Output);
-    Output << ",0x" << Size << "," << (IsJT ? "1" : "0") << "\n";
 
     // We already finished discovering new code to translate, so we can remove
     // the references to local variables as argument of the calls to newpc and

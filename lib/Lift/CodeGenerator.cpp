@@ -67,18 +67,6 @@ using std::string;
 
 // Register all the arguments
 
-// TODO: can we drop this and the associated functionality?
-static cl::opt<string> CoveragePath("coverage-path",
-                                    cl::desc("destination path for the CSV "
-                                             "containing "
-                                             "translated ranges"),
-                                    cl::value_desc("path"),
-                                    cl::cat(MainCategory));
-static cl::alias A1("c",
-                    cl::desc("Alias for -coverage-path"),
-                    cl::aliasopt(CoveragePath),
-                    cl::cat(MainCategory));
-
 // TODO: linking-info-path?
 static cl::opt<string> LinkingInfoPath("linking-info",
                                        cl::desc("destination path for the CSV "
@@ -88,18 +76,6 @@ static cl::opt<string> LinkingInfoPath("linking-info",
 static cl::alias A2("i",
                     cl::desc("Alias for -linking-info"),
                     cl::aliasopt(LinkingInfoPath),
-                    cl::cat(MainCategory));
-
-// TODO: can we drop this and the associated functionality?
-static cl::opt<string> BBSummaryPath("bb-summary",
-                                     cl::desc("destination path for the CSV "
-                                              "containing the statistics about "
-                                              "the translated basic blocks"),
-                                     cl::value_desc("path"),
-                                     cl::cat(MainCategory));
-static cl::alias A3("b",
-                    cl::desc("Alias for -bb-summary"),
-                    cl::aliasopt(BBSummaryPath),
                     cl::cat(MainCategory));
 
 // Enable Debug Options to be specified on the command line
@@ -255,12 +231,6 @@ CodeGenerator::CodeGenerator(BinaryFile &Binary,
   }
 
   EarlyLinkedModule = parseIR(EarlyLinked, Context);
-
-  if (CoveragePath.size() == 0)
-    CoveragePath = Output + ".coverage.csv";
-
-  if (BBSummaryPath.size() == 0)
-    BBSummaryPath = Output + ".bbsummary.csv";
 
   // Prepare the linking info CSV
   if (LinkingInfoPath.size() == 0)
@@ -1305,7 +1275,7 @@ void CodeGenerator::translate(Optional<uint64_t> RawVirtualAddress) {
 
   Variables.setDataLayout(&TheModule->getDataLayout());
 
-  Translator.finalizeNewPCMarkers(CoveragePath);
+  Translator.finalizeNewPCMarkers();
 
   // SROA must run before InstCombine because in this way InstCombine has many
   // more elementary operations to combine

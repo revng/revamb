@@ -104,9 +104,7 @@ public:
   TranslationResult translateCall(PTCInstruction *Instr);
 
   /// \brief Handle calls to `newPC` marker and emit coverage information
-  ///
-  /// \param CoveragePath path where the coverage information should be stored.
-  void finalizeNewPCMarkers(std::string &CoveragePath);
+  void finalizeNewPCMarkers();
 
   /// \brief Notifies InstructionTranslator about a new PTC translation
   void reset() { LabeledBasicBlocks.clear(); }
