@@ -100,7 +100,7 @@ def main():
         log("Couldn't find revng.model metadata")
         return 1
 
-    # Look for associated named metadata5~
+    # Look for associated named metadata
     for line in sys.stdin:
         if prefix and line.startswith(prefix):
             text_model = line[len(prefix):-3]
