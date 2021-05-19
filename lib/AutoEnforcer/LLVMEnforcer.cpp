@@ -6,9 +6,9 @@
 
 using namespace std;
 using namespace llvm;
-using namespace Model;
+using namespace AutoEnforcer;
 
-const char Model::DefaultLLVMContainer::ID = '_';
+const char DefaultLLVMContainer::ID = '_';
 
 unique_ptr<BackingContainerBase>
 DefaultLLVMContainer::cloneFiltered(const TargetContainer &Targets) const {

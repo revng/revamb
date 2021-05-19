@@ -5,21 +5,23 @@
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/Enforcers/RevngEnforcers.h"
 
-using namespace Model;
 using namespace std;
+using namespace AutoEnforcer;
 
-Granularity Model::RootGranularity("Root Granularity");
+Granularity AutoEnforcer::RootGranularity("Root Granularity");
 Granularity
-  Model::FunctionsGranularity("Function Granularity", RootGranularity);
+  AutoEnforcer::FunctionsGranularity("Function Granularity", RootGranularity);
 
-Kind Model::Binary("Binary Kind", &RootGranularity);
-Kind Model::Root("Root kind", &RootGranularity);
-Kind Model::RootIsolated("Root Isolated Kind", Root, &RootGranularity);
-Kind Model::Support("Support Kind", &RootGranularity);
-Kind Model::Object("Object File Kind", &RootGranularity);
-Kind Model::Translated("Translated Kind", &RootGranularity);
-Kind Model::Dead("Dead Kind", &RootGranularity);
+Kind AutoEnforcer::Binary("Binary Kind", &RootGranularity);
+Kind AutoEnforcer::Root("Root kind", &RootGranularity);
+Kind AutoEnforcer::RootIsolated("Root Isolated Kind", Root, &RootGranularity);
+Kind AutoEnforcer::Support("Support Kind", &RootGranularity);
+Kind AutoEnforcer::Object("Object File Kind", &RootGranularity);
+Kind AutoEnforcer::Translated("Translated Kind", &RootGranularity);
+Kind AutoEnforcer::Dead("Dead Kind", &RootGranularity);
 
-Kind Model::CFepper("CFepper Kind", &FunctionsGranularity);
-Kind Model::Isolated("Isolated Kind", &FunctionsGranularity);
-Kind Model::ABIEnforced("ABIEnforced Kind", Isolated, &FunctionsGranularity);
+Kind AutoEnforcer::CFepper("CFepper Kind", &FunctionsGranularity);
+Kind AutoEnforcer::Isolated("Isolated Kind", &FunctionsGranularity);
+Kind AutoEnforcer::ABIEnforced("ABIEnforced Kind",
+                               Isolated,
+                               &FunctionsGranularity);

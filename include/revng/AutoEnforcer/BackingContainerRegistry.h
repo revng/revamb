@@ -13,7 +13,7 @@
 
 #include "revng/AutoEnforcer/BackingContainers.h"
 
-namespace Model {
+namespace AutoEnforcer {
 class BackingContainerRegistryEntry {
 public:
   virtual std::unique_ptr<BackingContainerBase> createEmpty() const = 0;
@@ -71,4 +71,4 @@ public:
 private:
   llvm::StringMap<std::unique_ptr<BackingContainerRegistryEntry>> Entries;
 };
-} // namespace Model
+} // namespace AutoEnforcer

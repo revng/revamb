@@ -6,7 +6,7 @@
 
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 
-namespace Model {
+namespace AutoEnforcer {
 
 class InputOutputContract {
 public:
@@ -64,4 +64,4 @@ private:
   bool PreservedInput;
 };
 
-} // namespace Model
+} // namespace AutoEnforcer

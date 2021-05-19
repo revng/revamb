@@ -17,7 +17,7 @@
 #include "revng/AutoEnforcer/AutoEnforcerErrors.h"
 #include "revng/AutoEnforcer/Step.h"
 
-namespace Model {
+namespace AutoEnforcer {
 
 class PipelineExecutionEntry {
 public:
@@ -122,4 +122,4 @@ public:
 private:
   std::vector<Step> Steps;
 };
-} // namespace Model
+} // namespace AutoEnforcer

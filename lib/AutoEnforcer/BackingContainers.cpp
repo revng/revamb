@@ -5,7 +5,7 @@
 #include "revng/AutoEnforcer/AutoEnforcerErrors.h"
 #include "revng/AutoEnforcer/BackingContainers.h"
 
-using namespace Model;
+using namespace AutoEnforcer;
 using namespace llvm;
 using namespace std;
 

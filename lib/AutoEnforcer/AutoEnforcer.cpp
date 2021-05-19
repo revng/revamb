@@ -6,11 +6,11 @@
 
 using namespace std;
 using namespace llvm;
-using namespace Model;
+using namespace AutoEnforcer;
 
 using InvalidationMap = StringMap<BackingContainersStatus>;
 Expected<InvalidationMap>
-AutoEnforcer::getInvalidations(const AutoEnforcerTarget &Target) const {
+PipelineRunner::getInvalidations(const AutoEnforcerTarget &Target) const {
   llvm::StringMap<BackingContainersStatus> Invalidations;
   for (const auto &Step : Pipeline)
     for (const auto &Container : Step.getBackingContainers())
@@ -22,7 +22,7 @@ AutoEnforcer::getInvalidations(const AutoEnforcerTarget &Target) const {
   return move(Invalidations);
 }
 
-Error AutoEnforcer::invalidate(const AutoEnforcerTarget &Target) {
+Error PipelineRunner::invalidate(const AutoEnforcerTarget &Target) {
   auto Invalidations = getInvalidations(Target);
   if (not Invalidations)
     return Invalidations.takeError();

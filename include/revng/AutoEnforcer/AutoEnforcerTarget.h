@@ -20,7 +20,7 @@
 #include "revng/Support/Assert.h"
 #include "revng/Support/Debug.h"
 
-namespace Model {
+namespace AutoEnforcer {
 namespace detail {
 struct EmptySturct {};
 }; // namespace detail
@@ -196,4 +196,4 @@ private:
   llvm::StringMap<TargetContainer> ContainersStatus;
 };
 
-} // namespace Model
+} // namespace AutoEnforcer

@@ -21,7 +21,7 @@
 #include "revng/Support/Debug.h"
 #include "revng/Support/FunctionIntrospection.h"
 
-namespace Model {
+namespace AutoEnforcer {
 
 namespace Detail {
 using StringArrayRef = llvm::ArrayRef<std::string>;
@@ -251,4 +251,4 @@ private:
   std::vector<EnforcerWrapper> Enforcers;
 };
 
-}; // namespace Model
+}; // namespace AutoEnforcer

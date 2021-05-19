@@ -10,9 +10,9 @@
 
 using namespace std;
 using namespace llvm;
-using namespace Model;
+using namespace AutoEnforcer;
 
-namespace Model {
+namespace AutoEnforcer {
 Error Pipeline::getObjectives(const BackingContainersStatus &Targets,
                               BackingContainersStatus &ToLoad,
                               std::vector<PipelineExecutionEntry> &ToExec) {
@@ -96,4 +96,4 @@ Error Pipeline::invalidate(const StatusMap &Invalidations) {
   return Error::success();
 }
 
-} // namespace Model
+} // namespace AutoEnforcer

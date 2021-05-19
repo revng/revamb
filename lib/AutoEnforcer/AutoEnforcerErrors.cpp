@@ -9,7 +9,7 @@
 
 using namespace llvm;
 using namespace std;
-using namespace Model;
+using namespace AutoEnforcer;
 
 char UnsatisfiableRequestError::ID;
 

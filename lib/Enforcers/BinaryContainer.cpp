@@ -4,4 +4,4 @@
 
 #include "revng/Enforcers/BinaryContainer.h"
 
-char Model::BinaryContainer::ID;
+char AutoEnforcer::BinaryContainer::ID;

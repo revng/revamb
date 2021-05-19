@@ -25,7 +25,7 @@
 #include "revng/AutoEnforcer/Step.h"
 #include "revng/Support/Debug.h"
 
-namespace Model {
+namespace AutoEnforcer {
 
 class LLVMContainer {
 public:
@@ -191,4 +191,4 @@ wrapLLVMPassess(std::string LLVMModuleName, LLVMEnforcerPassess &&... P) {
                          { std::move(LLVMModuleName) });
 }
 
-} // namespace Model
+} // namespace AutoEnforcer

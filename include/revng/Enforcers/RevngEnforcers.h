@@ -12,8 +12,8 @@
 #include "revng/AutoEnforcer/BackingContainers.h"
 #include "revng/AutoEnforcer/InputOutputContract.h"
 #include "revng/AutoEnforcer/LLVMEnforcer.h"
-#include "revng/Enforcers/BinaryContainer.h"
-namespace Model {
+
+namespace AutoEnforcer {
 
 extern Granularity RootGranularity;
 extern Granularity FunctionsGranularity;
@@ -181,4 +181,4 @@ public:
   }
 };
 
-} // namespace Model
+} // namespace AutoEnforcer

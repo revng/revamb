@@ -12,8 +12,8 @@
 #include "revng/AutoEnforcer/Pipeline.h"
 #include "revng/Support/Debug.h"
 
-namespace Model {
-class AutoEnforcer {
+namespace AutoEnforcer {
+class PipelineRunner {
 public:
   using iterator = std::vector<Step>::iterator;
   using const_iterator = std::vector<Step>::const_iterator;
@@ -106,4 +106,4 @@ private:
   bool CommittedRegistry = false;
   Pipeline Pipeline;
 };
-} // namespace Model
+} // namespace AutoEnforcer

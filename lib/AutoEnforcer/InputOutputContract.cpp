@@ -4,7 +4,7 @@
 
 #include "revng/AutoEnforcer/InputOutputContract.h"
 
-using namespace Model;
+using namespace AutoEnforcer;
 using namespace llvm;
 using namespace std;
 

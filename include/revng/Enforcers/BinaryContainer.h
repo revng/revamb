@@ -7,7 +7,7 @@
 #include "revng/AutoEnforcer/BackingContainers.h"
 #include "revng/Support/Assert.h"
 
-namespace Model {
+namespace AutoEnforcer {
 class BinaryContainer : public BackingContainer<BinaryContainer> {
 public:
   BinaryContainer() = default;
@@ -39,4 +39,4 @@ public:
 private:
 };
 
-} // namespace Model
+} // namespace AutoEnforcer

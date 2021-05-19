@@ -29,7 +29,7 @@ bool init_unit_test();
 
 #include "revng/UnitTestHelpers/UnitTestHelpers.h"
 
-using namespace Model;
+using namespace AutoEnforcer;
 using namespace std;
 
 static Granularity Root("Root");
@@ -347,7 +347,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractPreservedBackwardSecondary) {
 }
 
 BOOST_AUTO_TEST_CASE(StepCanCloneAndRun) {
-  Model::Pipeline Pip;
+  Pipeline Pip;
 
   BackingContainers Containers;
   Containers.add(CName, make_unique<MapContainer>());
@@ -367,7 +367,7 @@ BOOST_AUTO_TEST_CASE(PipelineCanBeManuallyExectued) {
   BackingContainerRegistry Registry;
   Registry.addDefaultConstruibleFactory<MapContainer>(CName);
 
-  Model::Pipeline Pip;
+  Pipeline Pip;
   Pip.add(Step("first_step",
                Registry.createEmpty(),
                bindEnforcer<TestEnforcer>(CName, CName)));
@@ -388,7 +388,7 @@ BOOST_AUTO_TEST_CASE(PipelineCanBeManuallyExectued) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineCanBeRunned) {
-  Model::Pipeline Pip;
+  Pipeline Pip;
 
   BackingContainers Containers;
   Containers.add(CName, make_unique<MapContainer>());
@@ -440,7 +440,7 @@ public:
 };
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineBackwardFinedGrained) {
-  AutoEnforcer AE;
+  PipelineRunner AE;
   AE.addDefaultConstruibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -461,7 +461,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineBackwardFinedGrained) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineFailure) {
-  AutoEnforcer AE;
+  PipelineRunner AE;
   AE.addDefaultConstruibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -539,7 +539,7 @@ struct LLVMEnforcerPassFunctionIdentity {
 BOOST_AUTO_TEST_CASE(SingleElementLLVMPipelineBackwardFinedGrained) {
   llvm::LLVMContext C;
 
-  AutoEnforcer AE;
+  PipelineRunner AE;
   AE.addContainerFactory<DefaultLLVMContainerFactory>(CName, C);
 
   AE.addStep("first_step",
@@ -567,7 +567,7 @@ BOOST_AUTO_TEST_CASE(SingleElementLLVMPipelineBackwardFinedGrained) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineForwardFinedGrained) {
-  AutoEnforcer AE;
+  PipelineRunner AE;
   AE.addDefaultConstruibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -590,7 +590,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineForwardFinedGrained) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineInvalidation) {
-  AutoEnforcer AE;
+  PipelineRunner AE;
   AE.addDefaultConstruibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -611,7 +611,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineInvalidation) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineWithRemove) {
-  AutoEnforcer AE;
+  PipelineRunner AE;
   AE.addDefaultConstruibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));

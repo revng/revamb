@@ -16,7 +16,7 @@
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/InputOutputContract.h"
 
-namespace Model {
+namespace AutoEnforcer {
 
 class BackingContainerBase {
 public:
@@ -143,4 +143,4 @@ private:
   Map Containers;
 };
 
-} // namespace Model
+} // namespace AutoEnforcer

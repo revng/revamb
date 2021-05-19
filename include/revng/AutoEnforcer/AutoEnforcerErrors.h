@@ -9,7 +9,7 @@
 
 #include "revng/AutoEnforcer/InputOutputContract.h"
 
-namespace Model {
+namespace AutoEnforcer {
 
 class UnsatisfiableRequestError
   : public llvm::ErrorInfo<UnsatisfiableRequestError> {
@@ -46,4 +46,4 @@ private:
   std::string BackingContainerName;
 };
 
-} // namespace Model
+} // namespace AutoEnforcer
