@@ -54,6 +54,12 @@ public:
     Entries.insert_or_assign(Name, std::move(BC));
   }
 
+  void
+  addContainerFactory(llvm::StringRef Name,
+                      std::unique_ptr<BackingContainerRegistryEntry> Entry) {
+    Entries.insert_or_assign(Name, std::move(Entry));
+  }
+
   template<typename BackingCont>
   void addDefaultConstruibleFactory(llvm::StringRef Name) {
     using FactoryT = DefaultConstructibleBackingContainerFactory<BackingCont>;

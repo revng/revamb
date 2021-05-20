@@ -16,12 +16,14 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include <llvm/Support/YAMLTraits.h>
 
 #include "revng/AutoEnforcer/AutoEnforcer.h"
 #include "revng/AutoEnforcer/AutoEnforcerErrors.h"
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/BackingContainerRegistry.h"
 #include "revng/AutoEnforcer/LLVMEnforcer.h"
+#include "revng/AutoEnforcer/PipelineLoader.h"
 
 #define BOOST_TEST_MODULE AutoEnforcer
 bool init_unit_test();
@@ -624,6 +626,59 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineWithRemove) {
   BOOST_TEST(!Error);
   auto IsIn = AE.getStartingContainer<MapContainer>(CName).contains(ToKill);
   BOOST_TEST(IsIn == false);
+}
+
+BOOST_AUTO_TEST_CASE(PipelineLoaderTest) {
+  StepDeclaration SDeclaration{
+    "FirstStep", { { "FineGranerEnforcer", { CName, CName } } }
+  };
+  PipelineDeclaration PDeclaration{ { { CName, "MapContainer" } },
+                                    { move(SDeclaration) } };
+
+  PipelineLoader Loader;
+  Loader.addDefaultConstructibleContainer<MapContainer>("MapContainer");
+  Loader.addEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
+
+  auto MaybeAE = Loader.load(PDeclaration);
+  BOOST_TEST(!!MaybeAE);
+  auto &AE = *MaybeAE;
+  BOOST_TEST((AE[0].getName() == "FirstStep"));
+  BOOST_TEST((AE[1].getName() == "End"));
+
+  BackingContainersStatus Targets;
+  Targets.add(CName, { "Root", "f1" }, FunctionKind);
+  AE.getStartingContainer<MapContainer>(CName).get({ "Root", RootKind }) = 1;
+
+  auto Error = AE.run(Targets);
+  BOOST_TEST(!Error);
+  const auto &FinalContainer = AE.getFinalContainer<MapContainer>(CName);
+  AutoEnforcerTarget FinalTarget({ "Root", "f1" }, FunctionKind);
+  auto Val = FinalContainer.get(FinalTarget);
+
+  BOOST_TEST(Val == 1);
+}
+
+BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYaml) {
+  PipelineLoader Loader;
+  Loader.addDefaultConstructibleContainer<MapContainer>("MapContainer");
+  Loader.addEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
+
+  std::string Pipeline("---"
+                       "Containers:"
+                       "  - Name:            ContainerName"
+                       "    Type:            MapContainer"
+                       "Steps:"
+                       "  - Name:            FirstStep"
+                       "    Enforcers:"
+                       "      - Name:            FineGranerEnforcer"
+                       "        UsedContainers:"
+                       "          - ContainerName"
+                       "          - ContainerName"
+                       "...");
+
+  auto MaybeAutoEnforcer = Loader.load(Pipeline);
+
+  BOOST_TEST(!!MaybeAutoEnforcer);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

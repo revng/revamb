@@ -208,6 +208,10 @@ public:
 
   BackingContainers &getBackingContainers() { return BackingContainer; }
 
+  void addEnforcer(EnforcerWrapper Wrapper) {
+    Enforcers.push_back(std::move(Wrapper));
+  }
+
   template<typename... EnforcerWrapperTypes>
   Step(std::string Name,
        BackingContainers BackingContainer,

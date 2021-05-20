@@ -78,6 +78,12 @@ public:
                                           std::forward<Args>(Arguments)...);
   }
 
+  void
+  addContainerFactory(llvm::StringRef Name,
+                      std::unique_ptr<BackingContainerRegistryEntry> Entry) {
+    Registry.addContainerFactory(Name, std::move(Entry));
+  }
+
   template<typename BackingContainer>
   void addDefaultConstruibleFactory(llvm::StringRef Name) {
     revng_assert(not CommittedRegistry);
@@ -95,6 +101,11 @@ public:
     Pipeline.dump(OS, Indents);
   }
   void dump() const debug_function { dump(dbg); }
+  Step &operator[](size_t Index) { return Pipeline[Index]; }
+  const Step &operator[](size_t Index) const { return Pipeline[Index]; }
+
+  const Step &back() const { return Pipeline.back(); }
+  Step &back() { return Pipeline.back(); }
 
   llvm::Expected<InvalidationMap>
   getInvalidations(const AutoEnforcerTarget &Target) const;
