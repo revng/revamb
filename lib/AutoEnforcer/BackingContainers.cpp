@@ -2,6 +2,8 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include "llvm/Support/Error.h"
+
 #include "revng/AutoEnforcer/AutoEnforcerErrors.h"
 #include "revng/AutoEnforcer/BackingContainers.h"
 
@@ -54,4 +56,50 @@ void BackingContainers::intersect(BackingContainersStatus &ToIntersect) const {
       return not BackingContainer.contains(Target);
     });
   }
+}
+
+llvm::Error BackingContainers::store(StringRef Directory) const {
+  for (const auto &Pair : Containers) {
+    const auto &Name = Directory.str() + "/" + Pair.first().str();
+    const auto &Container = Pair.second;
+
+    if (auto Error = Container->storeToDisk(Name); !!Error)
+      return Error;
+  }
+  return Error::success();
+}
+
+llvm::Error BackingContainers::load(StringRef Directory) {
+  for (const auto &Pair : Containers) {
+    const auto &Name = Directory.str() + "/" + Pair.first().str();
+    const auto &Container = Pair.second;
+
+    if (auto Error = Container->loadFromDisk(Name); !!Error)
+      return Error;
+  }
+  return Error::success();
+}
+
+llvm::Expected<const BackingContainerBase *>
+BackingContainers::safeGetContainer(llvm::StringRef ContainerName) const {
+  auto It = Containers.find(ContainerName);
+  if (It == Containers.end())
+    return createStringError(inconvertibleErrorCode(),
+                             "could not find container named %s in backing "
+                             "containers",
+                             ContainerName.str().c_str());
+
+  return &*It->second;
+}
+
+llvm::Expected<BackingContainerBase *>
+BackingContainers::safeGetContainer(llvm::StringRef ContainerName) {
+  auto It = Containers.find(ContainerName);
+  if (It == Containers.end())
+    return createStringError(inconvertibleErrorCode(),
+                             "could not find container named %s in backing "
+                             "containers",
+                             ContainerName.str().c_str());
+
+  return &*It->second;
 }

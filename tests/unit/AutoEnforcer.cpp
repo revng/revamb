@@ -15,8 +15,9 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/YAMLTraits.h"
 #include "llvm/Transforms/Utils/Cloning.h"
-#include <llvm/Support/YAMLTraits.h>
+#include <llvm/ADT/SmallVector.h>
 
 #include "revng/AutoEnforcer/AutoEnforcer.h"
 #include "revng/AutoEnforcer/AutoEnforcerErrors.h"
@@ -84,8 +85,19 @@ public:
   auto &getMap() const { return map; }
   auto &getMap() { return map; }
 
+  llvm::Error storeToDisk(llvm::StringRef Path) const override {
+    savedData = map;
+    return llvm::Error::success();
+  }
+
+  llvm::Error loadFromDisk(llvm::StringRef Path) override {
+    map = savedData;
+    return llvm::Error::success();
+  }
+
 private:
   std::map<AutoEnforcerTarget, int> map;
+  mutable std::map<AutoEnforcerTarget, int> savedData;
 };
 
 char MapContainer::ID;
@@ -658,27 +670,104 @@ BOOST_AUTO_TEST_CASE(PipelineLoaderTest) {
   BOOST_TEST(Val == 1);
 }
 
+static const std::string Pipeline(R"(---
+                       Containers:
+                         - Name:            ContainerName
+                           Type:            MapContainer
+                       Steps:
+                         - Name:            FirstStep
+                           Enforcers:
+                             - Name:            FineGranerEnforcer
+                               UsedContainers:
+                                 - ContainerName
+                                 - ContainerName
+                       )");
+
 BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYaml) {
   PipelineLoader Loader;
   Loader.addDefaultConstructibleContainer<MapContainer>("MapContainer");
   Loader.addEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
+  auto MaybeAutoEnforcer = Loader.load(Pipeline);
+  BOOST_TEST(!!MaybeAutoEnforcer);
+}
 
-  std::string Pipeline("---"
-                       "Containers:"
-                       "  - Name:            ContainerName"
-                       "    Type:            MapContainer"
-                       "Steps:"
-                       "  - Name:            FirstStep"
-                       "    Enforcers:"
-                       "      - Name:            FineGranerEnforcer"
-                       "        UsedContainers:"
-                       "          - ContainerName"
-                       "          - ContainerName"
-                       "...");
+BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYamlLLVM) {
+  llvm::LLVMContext C;
+  PipelineLoader Loader;
+  Loader.addContainerFactory<DefaultLLVMContainerFactory>("LLVMContainer", C);
+  Loader.addLLVMEnforcerPass<LLVMEnforcerPassFunctionCreator>("CreateFunctionPa"
+                                                              "ss");
+  Loader.addLLVMEnforcerPass<LLVMEnforcerPassFunctionIdentity>("IdentityPass");
+
+  std::string Pipeline(R"(---
+                       Containers:
+                         - Name:            CustomName
+                           Type:            LLVMContainer 
+                       Steps:
+                         - Name:            FirstStep
+                           Enforcers:
+                             - Name:             LLVMEnforcer
+                               UsedContainers:
+                                 - CustomName 
+                               Passess:
+                                 - CreateFunctionPass
+                                 - IdentityPass
+                       )");
 
   auto MaybeAutoEnforcer = Loader.load(Pipeline);
 
   BOOST_TEST(!!MaybeAutoEnforcer);
+  if (!MaybeAutoEnforcer)
+    llvm::outs() << MaybeAutoEnforcer.takeError();
+
+  MaybeAutoEnforcer->dump();
+}
+
+static std::string getCurrentPath() {
+  llvm::SmallVector<char, 3> ToReturn;
+  llvm::sys::fs::current_path(ToReturn);
+  return std::string(ToReturn.begin(), ToReturn.end());
+}
+
+BOOST_AUTO_TEST_CASE(SingleElementPipelineStoreToDisk) {
+  PipelineRunner AE;
+  AE.addDefaultConstruibleFactory<MapContainer>(CName);
+
+  AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
+  AE.addStep("End");
+
+  AE.getStartingContainer<MapContainer>(CName).get({ "Root", RootKind }) = 1;
+
+  BOOST_TEST((!AE.store(getCurrentPath())));
+
+  auto &Container = AE.getStartingContainer<MapContainer>(CName);
+
+  BOOST_TEST((Container.get({ "Root", RootKind }) == 1));
+  Container.get({ "Root", RootKind }) = 2;
+  BOOST_TEST((Container.get({ "Root", RootKind }) == 2));
+  BOOST_TEST((!AE.load(getCurrentPath())));
+  BOOST_TEST((Container.get({ "Root", RootKind }) == 1));
+}
+
+BOOST_AUTO_TEST_CASE(SingleElementPipelineStoreToDiskWithOverrides) {
+  PipelineLoader Loader;
+  Loader.addDefaultConstructibleContainer<MapContainer>("MapContainer");
+  Loader.addEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
+  auto MaybeAutoEnforcer = Loader.load(Pipeline);
+  BOOST_TEST(!!MaybeAutoEnforcer);
+  auto &AE = *MaybeAutoEnforcer;
+  auto MaybeMapping = PipelineFileMapping::parse("FirstStep:ContainerName:"
+                                                 "DontCareSourceFile");
+  BOOST_TEST(!!MaybeMapping);
+
+  auto &Container = AE.getStartingContainer<MapContainer>(CName);
+
+  Container.get({ "Root", RootKind }) = 1;
+  BOOST_TEST((!MaybeMapping->store(AE)));
+  Container.get({ "Root", RootKind }) = 2;
+  BOOST_TEST((Container.get({ "Root", RootKind }) == 2));
+  BOOST_TEST((!MaybeMapping->load(AE)));
+  BOOST_TEST((Container.get({ "Root", RootKind }) == 1));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

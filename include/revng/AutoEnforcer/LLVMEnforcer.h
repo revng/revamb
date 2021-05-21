@@ -6,17 +6,22 @@
 
 #include <array>
 #include <memory>
+#include <system_error>
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IRReader/IRReader.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
 
@@ -42,6 +47,28 @@ public:
 
   const llvm::Module &getModule() const { return *Module; }
   llvm::Module &getModule() { return *Module; }
+
+  llvm::Error storeToDisk(llvm::StringRef Path) const {
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Path, EC, llvm::sys::fs::F_None);
+    llvm::WriteBitcodeToFile(*Module, OS);
+    OS.flush();
+    return llvm::createStringError(EC,
+                                   "Could not store to file module %s",
+                                   Path.str().c_str());
+  }
+
+  llvm::Error loadFromDisk(llvm::StringRef Path) {
+    llvm::SMDiagnostic Error;
+    auto M = llvm::parseIRFile(Path, Error, Module->getContext());
+    if (!M)
+      return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                     "Could not parse file %s",
+                                     Path.str().c_str());
+
+    Module = std::move(M);
+    return llvm::Error::success();
+  }
 
 protected:
   std::unique_ptr<llvm::Module> Module;
@@ -83,6 +110,14 @@ public:
     return true;
   }
 
+  llvm::Error storeToDisk(llvm::StringRef Path) const override {
+    return Container.storeToDisk(Path);
+  }
+
+  llvm::Error loadFromDisk(llvm::StringRef Path) override {
+    return Container.loadFromDisk(Path);
+  }
+
 private:
   LLVMContainer Container;
 };
@@ -103,7 +138,6 @@ private:
 
 using DefaultLLVMContainerFactory = LLVMContainerFactory<DefaultLLVMContainer>;
 
-namespace Detail {
 class LLVMEnforcerBaseImpl {
 public:
   virtual ~LLVMEnforcerBaseImpl() = default;
@@ -143,15 +177,13 @@ private:
   llvm::SmallVector<InputOutputContract, 2> Contract;
 };
 
-} // namespace Detail
-
 class LLVMEnforcer {
 
 public:
   static constexpr auto Name = "LLVMEnforcer";
   template<typename... LLVMEnforcerPass>
   explicit LLVMEnforcer(LLVMEnforcerPass... Pass) {
-    (emplacePass<LLVMEnforcerPass>(std::move(Pass)), ...);
+    (addPass<LLVMEnforcerPass>(std::move(Pass)), ...);
   }
 
   LLVMEnforcer &operator=(const LLVMEnforcer &Other);
@@ -173,15 +205,19 @@ public:
 
   void dump() const { dump(dbg); }
 
-private:
   template<typename LLVMEnforcerPass>
-  void emplacePass(LLVMEnforcerPass Pass) {
-    using Type = Detail::LLVMEnforcerImpl<LLVMEnforcerPass>;
+  void addPass(LLVMEnforcerPass Pass) {
+    using Type = LLVMEnforcerImpl<LLVMEnforcerPass>;
     auto Wrapper = std::make_unique<Type>(std::forward<LLVMEnforcerPass>(Pass));
     Passess.emplace_back(std::move(Wrapper));
   }
 
-  llvm::SmallVector<std::unique_ptr<Detail::LLVMEnforcerBaseImpl>, 3> Passess;
+  void addPass(std::unique_ptr<LLVMEnforcerBaseImpl> Impl) {
+    Passess.emplace_back(std::move(Impl));
+  }
+
+private:
+  llvm::SmallVector<std::unique_ptr<LLVMEnforcerBaseImpl>, 3> Passess;
 };
 
 template<typename... LLVMEnforcerPassess>

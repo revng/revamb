@@ -96,4 +96,18 @@ Error Pipeline::invalidate(const StatusMap &Invalidations) {
   return Error::success();
 }
 
+Error Pipeline::store(llvm::StringRef DirPath) const {
+  for (const auto &Step : Steps)
+    if (auto Error = Step.store(DirPath); !!Error)
+      return Error;
+  return Error::success();
+}
+
+Error Pipeline::load(llvm::StringRef DirPath) {
+  for (auto &Step : Steps)
+    if (auto Error = Step.load(DirPath); !!Error)
+      return Error;
+  return Error::success();
+}
+
 } // namespace AutoEnforcer

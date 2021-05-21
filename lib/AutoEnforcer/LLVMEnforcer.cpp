@@ -46,8 +46,7 @@ LLVMEnforcer &LLVMEnforcer::operator=(const LLVMEnforcer &Other) {
   if (this == &Other)
     return *this;
 
-  llvm::SmallVector<std::unique_ptr<Detail::LLVMEnforcerBaseImpl>, 3>
-    NewPassess;
+  llvm::SmallVector<std::unique_ptr<LLVMEnforcerBaseImpl>, 3> NewPassess;
 
   for (const auto &P : Other.Passess)
     NewPassess.push_back(P->clone());

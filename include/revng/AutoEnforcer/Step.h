@@ -15,6 +15,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/iterator_range.h"
+#include "llvm/Support/Error.h"
 
 #include "revng/AutoEnforcer/BackingContainers.h"
 #include "revng/AutoEnforcer/InputOutputContract.h"
@@ -240,6 +241,19 @@ public:
   llvm::Error invalidate(const BackingContainersStatus &ToRemove);
 
   void dump() const debug_function { dump(dbg); }
+
+  llvm::Error store(llvm::StringRef DirPath) const;
+  llvm::Error load(llvm::StringRef DirPath);
+
+  llvm::Expected<const BackingContainerBase *>
+  safeGetContainer(llvm::StringRef ContainerName) const {
+    return BackingContainer.safeGetContainer(ContainerName);
+  }
+
+  llvm::Expected<BackingContainerBase *>
+  safeGetContainer(llvm::StringRef ContainerName) {
+    return BackingContainer.safeGetContainer(ContainerName);
+  }
 
 private:
   static void

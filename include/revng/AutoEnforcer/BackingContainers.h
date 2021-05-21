@@ -11,6 +11,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/MemoryBuffer.h"
 
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
@@ -27,6 +28,8 @@ public:
   virtual void mergeBack(BackingContainerBase &) = 0;
   virtual bool contains(const AutoEnforcerTarget &Target) const = 0;
   virtual bool remove(const AutoEnforcerTarget &Target) = 0;
+  virtual llvm::Error storeToDisk(llvm::StringRef Path) const = 0;
+  virtual llvm::Error loadFromDisk(llvm::StringRef Path) = 0;
   virtual ~BackingContainerBase() = default;
 
   static bool classof(const BackingContainerBase *) { return true; }
@@ -138,6 +141,15 @@ public:
 
   llvm::Error remove(const BackingContainersStatus &ToRemove);
   void intersect(BackingContainersStatus &ToIntersect) const;
+
+  llvm::Error store(llvm::StringRef DirectoryPath) const;
+  llvm::Error load(llvm::StringRef DirectoryPath);
+
+  llvm::Expected<const BackingContainerBase *>
+  safeGetContainer(llvm::StringRef ContainerName) const;
+
+  llvm::Expected<BackingContainerBase *>
+  safeGetContainer(llvm::StringRef ContainerName);
 
 private:
   Map Containers;

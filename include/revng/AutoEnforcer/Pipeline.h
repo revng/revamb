@@ -119,6 +119,9 @@ public:
   llvm::Error
   invalidate(const llvm::StringMap<BackingContainersStatus> &Invalidations);
 
+  llvm::Error store(llvm::StringRef DirPath) const;
+  llvm::Error load(llvm::StringRef DirPath);
+
 private:
   std::vector<Step> Steps;
 };

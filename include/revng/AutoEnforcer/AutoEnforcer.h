@@ -4,6 +4,8 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <string>
+
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Error.h"
 
@@ -112,9 +114,38 @@ public:
 
   llvm::Error invalidate(const AutoEnforcerTarget &Target);
 
+  llvm::Error store(llvm::StringRef DirPath) const {
+    return Pipeline.store(DirPath);
+  }
+  llvm::Error load(llvm::StringRef DirPath) { return Pipeline.load(DirPath); }
+
+  llvm::Expected<const BackingContainerBase *>
+  safeGetContainer(llvm::StringRef StepName,
+                   llvm::StringRef ContainerName) const;
+  llvm::Expected<BackingContainerBase *>
+  safeGetContainer(llvm::StringRef StepName, llvm::StringRef ContainerName);
+
 private:
   BackingContainerRegistry Registry;
   bool CommittedRegistry = false;
   Pipeline Pipeline;
+};
+
+class PipelineFileMapping {
+private:
+  std::string Step;
+  std::string BackingContainer;
+  std::string InputFile;
+
+public:
+  PipelineFileMapping(std::string Step,
+                      std::string BackingContainer,
+                      std::string InputFile) :
+    Step(std::move(Step)),
+    BackingContainer(std::move(BackingContainer)),
+    InputFile(std::move(InputFile)) {}
+  static llvm::Expected<PipelineFileMapping> parse(llvm::StringRef ToParse);
+  llvm::Error load(PipelineRunner &LoadInto) const;
+  llvm::Error store(const PipelineRunner &LoadInto) const;
 };
 } // namespace AutoEnforcer

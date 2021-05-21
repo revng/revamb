@@ -14,4 +14,5 @@ revng_add_library_internal(revngAutoEnforcer
   PipelineLoader.cpp)
 
 target_link_libraries(revngModel
-  revngSupport)
+  revngSupport
+  ${LLVM_LIBRARIES})

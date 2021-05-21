@@ -2,6 +2,9 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include "llvm/Support/Error.h"
+#include "llvm/Support/Path.h"
+
 #include "revng/AutoEnforcer/Step.h"
 #include "revng/Support/Debug.h"
 
@@ -86,4 +89,17 @@ void BackingContainersStatus::merge(const BackingContainersStatus &Other) {
 
 Error Step::invalidate(const BackingContainersStatus &ToRemove) {
   return getBackingContainers().remove(ToRemove);
+}
+
+Error Step::store(llvm::StringRef DirPath) const {
+  auto Path = DirPath.str() + "/" + Name;
+  if (auto ErrorCode = llvm::sys::fs::create_directories(DirPath); ErrorCode)
+    return createStringError(ErrorCode,
+                             "Could not create dir %s",
+                             DirPath.str().c_str());
+  return BackingContainer.store(Path);
+}
+Error Step::load(llvm::StringRef DirPath) {
+  auto Path = DirPath.str() + "/" + Name;
+  return BackingContainer.load(Path);
 }

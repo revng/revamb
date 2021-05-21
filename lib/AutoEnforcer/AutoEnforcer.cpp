@@ -28,3 +28,58 @@ Error PipelineRunner::invalidate(const AutoEnforcerTarget &Target) {
     return Invalidations.takeError();
   return Pipeline.invalidate(*Invalidations);
 }
+
+Expected<const BackingContainerBase *>
+PipelineRunner::safeGetContainer(StringRef StepName,
+                                 StringRef ContainerName) const {
+  auto It = find_if(*this, [&StepName](const Step &S) {
+    return StepName == S.getName();
+  });
+  if (It == end())
+    return createStringError(inconvertibleErrorCode(),
+                             "Could not find step with name %s",
+                             StepName.str().c_str());
+  return It->safeGetContainer(ContainerName);
+}
+
+Expected<BackingContainerBase *>
+PipelineRunner::safeGetContainer(StringRef StepName, StringRef ContainerName) {
+  auto It = find_if(*this, [&StepName](const Step &S) {
+    return StepName == S.getName();
+  });
+  if (It == end())
+    return createStringError(inconvertibleErrorCode(),
+                             "Could not find step with name %s",
+                             StepName.str().c_str());
+  return It->safeGetContainer(ContainerName);
+}
+
+llvm::Expected<PipelineFileMapping>
+PipelineFileMapping::parse(StringRef ToParse) {
+  SmallVector<StringRef, 3> Splitted;
+  ToParse.split(Splitted, ':', 2);
+
+  if (Splitted.size() != 3)
+    return createStringError(inconvertibleErrorCode(),
+                             "could not parse %s into three strings "
+                             "step:container:inputfile",
+                             ToParse.str().c_str());
+
+  return PipelineFileMapping(Splitted[0], Splitted[1], Splitted[2]);
+}
+
+Error PipelineFileMapping::load(PipelineRunner &LoadInto) const {
+  auto MaybeContainer = LoadInto.safeGetContainer(Step, BackingContainer);
+  if (!MaybeContainer)
+    return MaybeContainer.takeError();
+
+  return (**MaybeContainer).loadFromDisk(InputFile);
+}
+
+Error PipelineFileMapping::store(const PipelineRunner &LoadInto) const {
+  auto MaybeContainer = LoadInto.safeGetContainer(Step, BackingContainer);
+  if (!MaybeContainer)
+    return MaybeContainer.takeError();
+
+  return (**MaybeContainer).storeToDisk(InputFile);
+}
