@@ -103,3 +103,5 @@ BackingContainers::safeGetContainer(llvm::StringRef ContainerName) {
 
   return &*It->second;
 }
+
+char StringContainer::ID;

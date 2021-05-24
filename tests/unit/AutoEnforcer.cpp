@@ -5,6 +5,7 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <llvm/ADT/SmallVector.h>
 #include <memory>
 
 #include "llvm/ADT/StringRef.h"
@@ -17,7 +18,6 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/YAMLTraits.h"
 #include "llvm/Transforms/Utils/Cloning.h"
-#include <llvm/ADT/SmallVector.h>
 
 #include "revng/AutoEnforcer/AutoEnforcer.h"
 #include "revng/AutoEnforcer/AutoEnforcerErrors.h"

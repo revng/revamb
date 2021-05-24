@@ -62,6 +62,16 @@ public:
   HierarchyNode *getParent() { return Parent; }
   const HierarchyNode *getParent() const { return Parent; }
 
+  HierarchyNode *getRootAncestor() {
+    HierarchyNode *LastAncestor = this;
+    HierarchyNode *NextAncestor = Parent;
+    while (NextAncestor != nullptr) {
+      LastAncestor = NextAncestor;
+      NextAncestor = NextAncestor->getParent();
+    }
+    return LastAncestor;
+  }
+
   void dump(size_t Indent = 0) {
     for (size_t I = 0; I < Indent; ++I)
       std::cout << "  ";

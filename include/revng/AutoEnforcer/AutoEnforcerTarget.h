@@ -14,6 +14,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "revng/ADT/Hierarchy.h"
@@ -90,6 +91,14 @@ public:
       Entries.emplace_back(std::move(Name));
   }
 
+  AutoEnforcerTarget(llvm::ArrayRef<llvm::StringRef> Names,
+                     const Kind &K,
+                     KindExactness Exactness = KindExactness::Exact) :
+    K(&K), Exact(Exactness) {
+    for (auto Name : Names)
+      Entries.emplace_back(Name.str());
+  }
+
   bool operator<(const AutoEnforcerTarget &Other) const {
     auto Self = std::tie(Entries, K, Exact);
     auto OtherSelf = std::tie(Other.Entries, Other.K, Other.Exact);
@@ -122,6 +131,14 @@ public:
     OS << "\n";
   }
 
+  template<typename OStream, typename Range>
+  static void dumpQuantifiers(OStream &OS, Range R) {
+    for (const auto &Entry : R) {
+      Entry.dump(OS);
+      OS << "/";
+    }
+  }
+
   void dump() const debug_function { dump(dbg); }
 
 private:
@@ -130,9 +147,36 @@ private:
   KindExactness Exact;
 };
 
+template<typename KindDictionary>
+llvm::Expected<AutoEnforcerTarget>
+parseAutoEnforcerTarget(llvm::StringRef AsString, const KindDictionary &Dict) {
+  llvm::SmallVector<llvm::StringRef, 2> Parts;
+  AsString.split(Parts, ':', 2);
+
+  if (Parts.size() != 2)
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "string %s was not in expected form "
+                                   "<path:kind>",
+                                   AsString.str().c_str());
+
+  llvm::SmallVector<llvm::StringRef, 3> Path;
+  Parts[0].split(Path, '/');
+
+  auto It = Dict.find(Parts[1]);
+  if (It == Dict.end())
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "No known Kind %s in dictionary",
+                                   Parts[0].str().c_str());
+
+  return AutoEnforcerTarget(std::move(Path), *It->second);
+}
+
 class BackingContainersStatus {
 public:
   using TargetContainer = llvm::SmallVector<AutoEnforcerTarget, 3>;
+  using Container = llvm::StringMap<TargetContainer>;
+  using iterator = Container::iterator;
+  using const_iterator = Container::const_iterator;
 
   TargetContainer &operator[](llvm::StringRef ContainerName) {
     return ContainersStatus[ContainerName];
@@ -146,10 +190,10 @@ public:
     return ContainersStatus.find(ContainerName)->getValue();
   }
 
-  auto begin() { return ContainersStatus.begin(); }
-  auto end() { return ContainersStatus.end(); }
-  auto begin() const { return ContainersStatus.begin(); }
-  auto end() const { return ContainersStatus.end(); }
+  iterator begin() { return ContainersStatus.begin(); }
+  iterator end() { return ContainersStatus.end(); }
+  const_iterator begin() const { return ContainersStatus.begin(); }
+  const_iterator end() const { return ContainersStatus.end(); }
 
   bool empty() const { return size() == 0; }
   size_t size() const {
@@ -188,12 +232,47 @@ public:
     OS << "}\n";
   }
 
+  iterator find(llvm::StringRef ContainerName) {
+    return ContainersStatus.find(ContainerName);
+  }
+
+  const_iterator find(llvm::StringRef ContainerName) const {
+    return ContainersStatus.find(ContainerName);
+  }
+
   void dump() const { dump(dbg); }
 
   void merge(const BackingContainersStatus &Other);
 
 private:
-  llvm::StringMap<TargetContainer> ContainersStatus;
+  Container ContainersStatus;
 };
+
+template<typename KindDictionary>
+llvm::Error parseAutoEnforcerTarget(BackingContainersStatus &CurrentStatus,
+                                    llvm::StringRef AsString,
+                                    const KindDictionary &Dict) {
+  llvm::SmallVector<llvm::StringRef, 2> Parts;
+  AsString.split(Parts, ':', 2);
+
+  if (Parts.size() != 2)
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "string %s was not in expected form "
+                                   "<BackingContainerName:AutoEnforcerTarget>",
+                                   AsString.str().c_str());
+
+  auto MaybeContainer = CurrentStatus.find(Parts[0]);
+  if (MaybeContainer == CurrentStatus.end())
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "No known container named %s",
+                                   Parts[0].str().c_str());
+
+  auto MaybeTarget = parseAutoEnforcerTarget(Parts[1], Dict);
+  if (not MaybeTarget)
+    return MaybeTarget.takeError();
+
+  CurrentStatus.add(Parts[0], std::move(*MaybeTarget));
+  return llvm::Error::success();
+}
 
 } // namespace AutoEnforcer

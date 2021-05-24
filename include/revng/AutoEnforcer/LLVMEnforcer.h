@@ -51,11 +51,13 @@ public:
   llvm::Error storeToDisk(llvm::StringRef Path) const {
     std::error_code EC;
     llvm::raw_fd_ostream OS(Path, EC, llvm::sys::fs::F_None);
+    if (EC)
+      return llvm::createStringError(EC,
+                                     "Could not store to file module %s",
+                                     Path.str().c_str());
     llvm::WriteBitcodeToFile(*Module, OS);
     OS.flush();
-    return llvm::createStringError(EC,
-                                   "Could not store to file module %s",
-                                   Path.str().c_str());
+    return llvm::Error::success();
   }
 
   llvm::Error loadFromDisk(llvm::StringRef Path) {
