@@ -73,7 +73,6 @@ llvm::Error BackingContainers::load(StringRef Directory) {
   for (const auto &Pair : Containers) {
     const auto &Name = Directory.str() + "/" + Pair.first().str();
     const auto &Container = Pair.second;
-
     if (auto Error = Container->loadFromDisk(Name); !!Error)
       return Error;
   }
@@ -103,5 +102,3 @@ BackingContainers::safeGetContainer(llvm::StringRef ContainerName) {
 
   return &*It->second;
 }
-
-char StringContainer::ID;

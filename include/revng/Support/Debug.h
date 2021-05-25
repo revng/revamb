@@ -27,7 +27,7 @@ extern size_t MaxLoggerNameLength;
 template<typename OStream>
 void indent(OStream &OS, size_t Indents) {
   for (size_t I = 0; I < Indents; I++)
-    OS << "\t";
+    OS << "  ";
 }
 
 /// \brief Stream an instance of this class to call Logger::emit()

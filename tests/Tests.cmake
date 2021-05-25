@@ -8,5 +8,6 @@ enable_testing()
 include(${CMAKE_SOURCE_DIR}/tests/unit/UnitTests.cmake)
 include(${CMAKE_SOURCE_DIR}/tests/analysis/AnalysisTests.cmake)
 include(${CMAKE_SOURCE_DIR}/tests/runtime/RuntimeTests.cmake)
+add_subdirectory(${CMAKE_SOURCE_DIR}/tests/tools)
 
 set(TEST_CFLAGS_${ARCH} "${TEST_CFLAGS_${ARCH}} -mthumb")

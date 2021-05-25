@@ -5,9 +5,9 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
-#include <llvm/ADT/SmallVector.h>
 #include <memory>
 
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
@@ -63,7 +63,7 @@ public:
     return map.count(Target);
   }
 
-  void mergeBackDerived(MapContainer &Container) override {
+  void mergeBackDerived(MapContainer &&Container) override {
     for (auto &Pair : Container.map)
       map.insert(std::move(Pair));
   }
@@ -146,7 +146,7 @@ public:
 
   void run(const MapContainer &Source, MapContainer &Target) {
     for (const auto &Element : Source.getMap())
-      if (Element.first.getKind() == RootKind) {
+      if (&Element.first.getKind() == &RootKind) {
         AutoEnforcerTarget NewTar = { Element.first.getQuantifiers(),
                                       RootKind2 };
         Target.get(NewTar) = Element.second;
@@ -168,7 +168,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractExactPassForward) {
 
   InputOutputContract Contract1(RootKind, KindExactness::Exact);
   Contract1.deduceResults(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -182,7 +182,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractExactExactForward) {
                                 RootKind2,
                                 0);
   Contract1.deduceResults(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind2));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind2));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -192,7 +192,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractDerivedPassForward) {
 
   InputOutputContract Contract1(RootKind, KindExactness::DerivedFrom);
   Contract1.deduceResults(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind2));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind2));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractDerivedExactForward) {
                                 RootKind,
                                 0);
   Contract1.deduceResults(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -216,7 +216,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractExactPassBackward) {
 
   InputOutputContract Contract1(RootKind, KindExactness::Exact);
   Contract1.deduceRequirements(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -230,7 +230,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractExactExactBackward) {
                                 RootKind2,
                                 0);
   Contract1.deduceRequirements(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -240,7 +240,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractDerivedPassBackward) {
 
   InputOutputContract Contract1(RootKind, KindExactness::DerivedFrom);
   Contract1.deduceRequirements(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind2));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind2));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -254,7 +254,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractDerivedExactBackward) {
                                 RootKind2,
                                 0);
   Contract1.deduceRequirements(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::DerivedFrom));
 }
 
@@ -268,7 +268,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractExactExactFineGrainedBackward) {
                                 FunctionKind,
                                 0);
   Contract1.deduceRequirements(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
   BOOST_TEST((Targets[CName][0].getQuantifiers().size() == 1));
   BOOST_TEST((Targets[CName][0].getQuantifiers()[0].getName() == "root"));
@@ -284,7 +284,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractExactExactFineGrainedForward) {
                                 FunctionKind,
                                 0);
   Contract1.deduceResults(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == FunctionKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &FunctionKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
   BOOST_TEST((Targets[CName][0].getQuantifiers().size() == 2));
   BOOST_TEST((Targets[CName][0].getQuantifiers()[0].getName() == "root"));
@@ -302,9 +302,9 @@ BOOST_AUTO_TEST_CASE(InputOutputContractMupltipleInputTest) {
                                 RootKind2,
                                 0);
   Contract1.deduceRequirements(Targets, { CName });
-  BOOST_TEST((Targets[CName][1].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][1].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][1].kindExactness() == KindExactness::DerivedFrom));
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -320,13 +320,13 @@ BOOST_AUTO_TEST_CASE(InputOutputContractPreserved) {
                                 0,
                                 true);
   Contract1.deduceResults(Targets, { CName });
-  BOOST_TEST((Targets[CName][2].getKind() == RootKind2));
+  BOOST_TEST((&Targets[CName][2].getKind() == &RootKind2));
   BOOST_TEST((Targets[CName][2].kindExactness() == KindExactness::Exact));
 
-  BOOST_TEST((Targets[CName][1].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][1].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][1].kindExactness() == KindExactness::Exact));
 
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind2));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind2));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -341,7 +341,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractPreservedBackwardMain) {
                                 0,
                                 true);
   Contract1.deduceRequirements(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::DerivedFrom));
 }
 
@@ -356,7 +356,7 @@ BOOST_AUTO_TEST_CASE(InputOutputContractPreservedBackwardSecondary) {
                                 0,
                                 true);
   Contract1.deduceRequirements(Targets, { CName });
-  BOOST_TEST((Targets[CName][0].getKind() == RootKind));
+  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
   BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
 }
 
@@ -379,7 +379,7 @@ BOOST_AUTO_TEST_CASE(StepCanCloneAndRun) {
 
 BOOST_AUTO_TEST_CASE(PipelineCanBeManuallyExectued) {
   BackingContainerRegistry Registry;
-  Registry.addDefaultConstruibleFactory<MapContainer>(CName);
+  Registry.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   Pipeline Pip;
   Pip.add(Step("first_step",
@@ -439,7 +439,7 @@ public:
   void run(const MapContainer &Source, MapContainer &Target) {
     for (const auto &Element : Source.getMap()) {
 
-      if (Element.first.getKind() != RootKind)
+      if (&Element.first.getKind() != &RootKind)
         continue;
 
       auto Quantifiers = Element.first.getQuantifiers();
@@ -455,7 +455,7 @@ public:
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineBackwardFinedGrained) {
   PipelineRunner AE;
-  AE.addDefaultConstruibleFactory<MapContainer>(CName);
+  AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
   AE.addStep("End");
@@ -476,7 +476,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineBackwardFinedGrained) {
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineFailure) {
   PipelineRunner AE;
-  AE.addDefaultConstruibleFactory<MapContainer>(CName);
+  AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
   AE.addStep("End");
@@ -554,7 +554,7 @@ BOOST_AUTO_TEST_CASE(SingleElementLLVMPipelineBackwardFinedGrained) {
   llvm::LLVMContext C;
 
   PipelineRunner AE;
-  AE.addContainerFactory<DefaultLLVMContainerFactory>(CName, C);
+  AE.registerContainerFactory<DefaultLLVMContainerFactory>(CName, C);
 
   AE.addStep("first_step",
              wrapLLVMPassess(CName,
@@ -582,7 +582,7 @@ BOOST_AUTO_TEST_CASE(SingleElementLLVMPipelineBackwardFinedGrained) {
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineForwardFinedGrained) {
   PipelineRunner AE;
-  AE.addDefaultConstruibleFactory<MapContainer>(CName);
+  AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
   AE.addStep("End");
@@ -605,7 +605,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineForwardFinedGrained) {
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineInvalidation) {
   PipelineRunner AE;
-  AE.addDefaultConstruibleFactory<MapContainer>(CName);
+  AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
   AE.addStep("End");
@@ -626,7 +626,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineInvalidation) {
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineWithRemove) {
   PipelineRunner AE;
-  AE.addDefaultConstruibleFactory<MapContainer>(CName);
+  AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
   AE.addStep("End");
@@ -648,8 +648,8 @@ BOOST_AUTO_TEST_CASE(PipelineLoaderTest) {
                                     { move(SDeclaration) } };
 
   PipelineLoader Loader;
-  Loader.addDefaultConstructibleContainer<MapContainer>("MapContainer");
-  Loader.addEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
+  Loader.registerDefaultConstructibleContainer<MapContainer>("MapContainer");
+  Loader.registerEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
 
   auto MaybeAE = Loader.load(PDeclaration);
   BOOST_TEST(!!MaybeAE);
@@ -685,8 +685,8 @@ static const std::string Pipeline(R"(---
 
 BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYaml) {
   PipelineLoader Loader;
-  Loader.addDefaultConstructibleContainer<MapContainer>("MapContainer");
-  Loader.addEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
+  Loader.registerDefaultConstructibleContainer<MapContainer>("MapContainer");
+  Loader.registerEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
   auto MaybeAutoEnforcer = Loader.load(Pipeline);
   BOOST_TEST(!!MaybeAutoEnforcer);
 }
@@ -694,10 +694,13 @@ BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYaml) {
 BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYamlLLVM) {
   llvm::LLVMContext C;
   PipelineLoader Loader;
-  Loader.addContainerFactory<DefaultLLVMContainerFactory>("LLVMContainer", C);
-  Loader.addLLVMEnforcerPass<LLVMEnforcerPassFunctionCreator>("CreateFunctionPa"
-                                                              "ss");
-  Loader.addLLVMEnforcerPass<LLVMEnforcerPassFunctionIdentity>("IdentityPass");
+  Loader.registerContainerFactory<DefaultLLVMContainerFactory>("LLVMContainer",
+                                                               C);
+  Loader.registerLLVMEnforcerPass<LLVMEnforcerPassFunctionCreator>("CreateFunct"
+                                                                   "ionPa"
+                                                                   "ss");
+  Loader.registerLLVMEnforcerPass<LLVMEnforcerPassFunctionIdentity>("IdentityPa"
+                                                                    "ss");
 
   std::string Pipeline(R"(---
                        Containers:
@@ -731,7 +734,7 @@ static std::string getCurrentPath() {
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineStoreToDisk) {
   PipelineRunner AE;
-  AE.addDefaultConstruibleFactory<MapContainer>(CName);
+  AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
   AE.addStep("End");
@@ -751,8 +754,8 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineStoreToDisk) {
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineStoreToDiskWithOverrides) {
   PipelineLoader Loader;
-  Loader.addDefaultConstructibleContainer<MapContainer>("MapContainer");
-  Loader.addEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
+  Loader.registerDefaultConstructibleContainer<MapContainer>("MapContainer");
+  Loader.registerEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
   auto MaybeAutoEnforcer = Loader.load(Pipeline);
   BOOST_TEST(!!MaybeAutoEnforcer);
   auto &AE = *MaybeAutoEnforcer;

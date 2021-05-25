@@ -28,7 +28,7 @@ public:
     return false;
   }
 
-  void mergeBackDerived(BinaryContainer &Container) override {
+  void mergeBackDerived(BinaryContainer &&Container) override {
     revng_abort("You have to tell me how to merge back the a binary "
                 "container into this one, probably a binary can only be "
                 "used as a source and this should never be used?");

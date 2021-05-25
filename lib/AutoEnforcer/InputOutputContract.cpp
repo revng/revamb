@@ -73,7 +73,7 @@ bool InputOutputContract::forwardMatches(const AutoEnforcerTarget &In) const {
   case KindExactness::DerivedFrom:
     return Source->ancestorOf(In.getKind());
   case KindExactness::Exact:
-    return In.getKind() == *Source;
+    return &In.getKind() == Source;
   }
   return false;
 }
@@ -180,7 +180,7 @@ InputOutputContract::backwardInputKind(const AutoEnforcerTarget &Output) const {
 
 bool InputOutputContract::backwardMatches(const AutoEnforcerTarget &Out) const {
   if (Target != nullptr)
-    return Out.getKind() == *Target;
+    return &Out.getKind() == Target;
 
   switch (InputContract) {
   case KindExactness::DerivedFrom:

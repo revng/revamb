@@ -34,8 +34,8 @@ PipelineLoader::parseLLVMPass(Step &Step,
     auto &Entry = It->second;
     ToInsert.addPass(Entry());
   }
-  Step.addEnforcer(
-    EnforcerWrapper(std::move(ToInsert), Invocation.UsedContainers));
+  auto Wrapper = EnforcerWrapper(move(ToInsert), Invocation.UsedContainers);
+  Step.addEnforcer(move(Wrapper));
 
   return Error::success();
 }
@@ -49,21 +49,25 @@ PipelineLoader::parseInvocation(Step &Step,
   auto It = KnownEnforcersTypes.find(Invocation.Name);
   if (It == KnownEnforcersTypes.end())
     return createStringError(inconvertibleErrorCode(),
-                             "No known enforcer with provided name");
+                             "while parsing inforcer invocation: No known "
+                             "enforcer with name %s ",
+                             Invocation.Name.c_str());
   auto &Entry = It->second;
   Step.addEnforcer(Entry(Invocation.UsedContainers));
   return Error::success();
 }
 
-llvm::Error PipelineLoader::parseContainerDeclaration(
-  PipelineRunner &Runner,
-  const BackingContainerDeclaration &Declaration) const {
-  auto It = KnownContainerTypes.find(Declaration.Type);
+using BCDecl = BackingContainerDeclaration;
+Error PipelineLoader::parseContainerDeclaration(PipelineRunner &AE,
+                                                const BCDecl &Dec) const {
+  auto It = KnownContainerTypes.find(Dec.Type);
   if (It == KnownContainerTypes.end())
     return createStringError(inconvertibleErrorCode(),
-                             "No known container with provided name");
+                             "while parsing contaienr declaration: No known "
+                             "container with name %s",
+                             Dec.Type.c_str());
   auto &Entry = It->second;
-  Runner.addContainerFactory(Declaration.Name, Entry());
+  AE.registerContainerFactory(Dec.Name, Entry());
 
   return Error::success();
 }

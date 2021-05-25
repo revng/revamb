@@ -1,4 +1,7 @@
 #pragma once
+//
+// This file is distributed under the MIT License. See LICENSE.md for details.
+//
 
 #include <memory>
 #include <string>
@@ -40,36 +43,43 @@ public:
   llvm::Expected<PipelineRunner> load(llvm::StringRef Pipeline) const;
 
   template<typename ContainerType>
-  void addDefaultConstructibleContainer(llvm::StringRef Name) {
+  void registerDefaultConstructibleContainer(llvm::StringRef Name) {
     KnownContainerTypes.try_emplace(Name, []() {
-      return std::make_unique<
-        DefaultConstructibleBackingContainerFactory<ContainerType>>();
+      using Type = DefaultConstructibleBackingContainerFactory<ContainerType>;
+      return std::make_unique<Type>();
     });
   }
 
   template<typename ContainerFactory, typename... Args>
-  void addContainerFactory(llvm::StringRef Name, Args &&... A) {
+  void registerContainerFactory(llvm::StringRef Name, Args &&... A) {
     KnownContainerTypes.try_emplace(Name, [&A...]() {
       return std::make_unique<ContainerFactory>(A...);
     });
   }
 
   template<typename LLVMEnforcerPass>
-  void addLLVMEnforcerPass(llvm::StringRef Name) {
+  void registerLLVMEnforcerPass(llvm::StringRef Name) {
     KnownLLVMEnforcerTypes.try_emplace(Name, []() {
       using Type = LLVMEnforcerImpl<LLVMEnforcerPass>;
-      return std::make_unique<Type>(
-        std::forward<LLVMEnforcerPass>(LLVMEnforcerPass()));
+      return std::make_unique<Type>(LLVMEnforcerPass());
     });
   }
 
   template<typename EnforcerType>
-  void addEnforcer(llvm::StringRef Name) {
-    KnownEnforcersTypes
-      .try_emplace(Name, [](std::vector<std::string> ContainerNames) {
-        return EnforcerWrapper::makeWrapper<EnforcerType>(
-          std::move(ContainerNames));
-      });
+  void registerEnforcer(llvm::StringRef Name) {
+    const auto LambdaToEmplace = [](std::vector<std::string> CName) {
+      return EnforcerWrapper::makeWrapper<EnforcerType>(std::move(CName));
+    };
+    KnownEnforcersTypes.try_emplace(Name, LambdaToEmplace);
+  }
+
+  template<typename EnforcerType>
+  void registerEnforcer(llvm::StringRef Name, const EnforcerType &Enforcer) {
+    const auto LambdaToEmplace =
+      [Enforcer](std::vector<std::string> ContainerNames) {
+        return EnforcerWrapper(Enforcer, std::move(ContainerNames));
+      };
+    KnownEnforcersTypes.try_emplace(Name, LambdaToEmplace);
   }
 
 private:
@@ -84,9 +94,8 @@ private:
   llvm::Error
   parseLLVMPass(Step &Step, const EnforcerInvocation &Invocation) const;
 
-  llvm::StringMap<
-    std::function<std::unique_ptr<BackingContainerRegistryEntry>()>>
-    KnownContainerTypes;
+  using FType = std::function<std::unique_ptr<BackingContainerFactory>()>;
+  llvm::StringMap<FType> KnownContainerTypes;
   llvm::StringMap<std::function<EnforcerWrapper(std::vector<std::string>)>>
     KnownEnforcersTypes;
   llvm::StringMap<std::function<std::unique_ptr<LLVMEnforcerBaseImpl>()>>

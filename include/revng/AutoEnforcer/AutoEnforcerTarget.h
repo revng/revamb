@@ -51,14 +51,14 @@ public:
   }
 
   template<typename OStream>
-  void dump(OStream &OS) const {
+  void dump(OStream &OS) const debug_function {
     if (Name.has_value())
       OS << *Name;
     else
       OS << "*";
   }
 
-  void dump() const { dump(dbg); }
+  void dump() const debug_function { dump(dbg); }
 
 private:
   std::optional<std::string> Name;
@@ -119,7 +119,7 @@ public:
   void dropGranularity() { Entries.pop_back(); }
 
   template<typename OStream>
-  void dump(OStream &OS, size_t Indents = 0) const {
+  void dump(OStream &OS, size_t Indents = 0) const debug_function {
     indent(OS, Indents);
 
     OS << (Exact == KindExactness::DerivedFrom ? "derived from " : "exactly ")
@@ -132,7 +132,7 @@ public:
   }
 
   template<typename OStream, typename Range>
-  static void dumpQuantifiers(OStream &OS, Range R) {
+  static void dumpQuantifiers(OStream &OS, Range R) debug_function {
     for (const auto &Entry : R) {
       Entry.dump(OS);
       OS << "/";
@@ -240,7 +240,7 @@ public:
     return ContainersStatus.find(ContainerName);
   }
 
-  void dump() const { dump(dbg); }
+  void dump() const debug_function { dump(dbg); }
 
   void merge(const BackingContainersStatus &Other);
 
@@ -253,19 +253,13 @@ llvm::Error parseAutoEnforcerTarget(BackingContainersStatus &CurrentStatus,
                                     llvm::StringRef AsString,
                                     const KindDictionary &Dict) {
   llvm::SmallVector<llvm::StringRef, 2> Parts;
-  AsString.split(Parts, ':', 2);
+  AsString.split(Parts, ':', 1);
 
   if (Parts.size() != 2)
     return llvm::createStringError(llvm::inconvertibleErrorCode(),
                                    "string %s was not in expected form "
                                    "<BackingContainerName:AutoEnforcerTarget>",
                                    AsString.str().c_str());
-
-  auto MaybeContainer = CurrentStatus.find(Parts[0]);
-  if (MaybeContainer == CurrentStatus.end())
-    return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                   "No known container named %s",
-                                   Parts[0].str().c_str());
 
   auto MaybeTarget = parseAutoEnforcerTarget(Parts[1], Dict);
   if (not MaybeTarget)

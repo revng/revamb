@@ -93,10 +93,10 @@ Error Step::invalidate(const BackingContainersStatus &ToRemove) {
 
 Error Step::store(llvm::StringRef DirPath) const {
   auto Path = DirPath.str() + "/" + Name;
-  if (auto ErrorCode = llvm::sys::fs::create_directories(DirPath); ErrorCode)
+  if (auto ErrorCode = llvm::sys::fs::create_directories(Path); ErrorCode)
     return createStringError(ErrorCode,
                              "Could not create dir %s",
-                             DirPath.str().c_str());
+                             Path.c_str());
   return BackingContainer.store(Path);
 }
 Error Step::load(llvm::StringRef DirPath) {

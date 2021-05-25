@@ -73,23 +73,23 @@ public:
   }
 
   template<typename BackingContainerType, typename... Args>
-  void addContainerFactory(llvm::StringRef Name, Args &&... Arguments) {
+  void registerContainerFactory(llvm::StringRef Name, Args &&... Arguments) {
     revng_assert(not CommittedRegistry);
-    Registry.addContainerFactory<BackingContainerType,
-                                 Args...>(Name,
-                                          std::forward<Args>(Arguments)...);
+    using BCT = BackingContainerType;
+    Registry.registerContainerFactory<BCT>(Name,
+                                           std::forward<Args>(Arguments)...);
   }
 
   void
-  addContainerFactory(llvm::StringRef Name,
-                      std::unique_ptr<BackingContainerRegistryEntry> Entry) {
-    Registry.addContainerFactory(Name, std::move(Entry));
+  registerContainerFactory(llvm::StringRef Name,
+                           std::unique_ptr<BackingContainerFactory> Entry) {
+    Registry.registerContainerFactory(Name, std::move(Entry));
   }
 
   template<typename BackingContainer>
-  void addDefaultConstruibleFactory(llvm::StringRef Name) {
+  void registerDefaultConstructibleFactory(llvm::StringRef Name) {
     revng_assert(not CommittedRegistry);
-    Registry.addDefaultConstruibleFactory<BackingContainer>(Name);
+    Registry.registerDefaultConstructibleFactory<BackingContainer>(Name);
   }
 
   iterator begin() { return Pipeline.begin(); }

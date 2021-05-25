@@ -15,6 +15,7 @@
 #include "revng/AutoEnforcer/AutoEnforcerLibraryRegistry.h"
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/BackingContainers.h"
+#include "revng/AutoEnforcer/CopyEnforcer.h"
 #include "revng/AutoEnforcer/PipelineLoader.h"
 #include "revng/Enforcers/RevngEnforcers.h"
 
@@ -46,6 +47,13 @@ static list<string> StoresOverrides("o",
                                          "target step in the target file"),
                                     cat(AutoEnforcerCategory));
 
+static opt<string> ExecutionFolder("p",
+                                   desc("Folder from which all containers will "
+                                        "be loaded before everything else and "
+                                        "to which it will be store after "
+                                        "everything else"),
+                                   cat(AutoEnforcerCategory));
+
 static list<string>
   loadLibraries("load", desc("libraries to open"), cat(AutoEnforcerCategory));
 
@@ -59,9 +67,7 @@ static ExitOnError exitOnError;
 class LLVMAutoEnforcerLibraryRegistry : public AutoEnforcerLibraryRegistry {
 
 public:
-  void registerContainersAndEnforcers(PipelineLoader &Loader) override {
-    Loader.addDefaultConstructibleContainer<StringContainer>("StringContainer");
-  }
+  void registerContainersAndEnforcers(PipelineLoader &Loader) override {}
 
   void registerKinds(llvm::StringMap<Kind *> &KindDictionary) override {
     KindDictionary["Root"] = &Root;
@@ -73,12 +79,19 @@ public:
 
 static LLVMAutoEnforcerLibraryRegistry Registry;
 
+static auto getBuffer(StringRef Path) {
+  return exitOnError(errorOrToExpected(MemoryBuffer::getFileOrSTDIN(Path)));
+}
+
 static PipelineRunner setUpAutoEnforcer() {
   PipelineLoader Loader;
+  AutoEnforcerLibraryRegistry::registerAllContainersAndEnforcers(Loader);
 
-  auto Pipeline = exitOnError(
-    errorOrToExpected(MemoryBuffer::getFileOrSTDIN(InputPipeline)));
+  auto Pipeline = getBuffer(InputPipeline);
   auto AutoEnforcer = exitOnError(Loader.load(Pipeline->getBuffer()));
+
+  if (not ExecutionFolder.empty())
+    exitOnError(AutoEnforcer.load(ExecutionFolder));
 
   for (const auto &Override : ContainerOverrides) {
     auto Mapping = exitOnError(PipelineFileMapping::parse(Override));
@@ -105,6 +118,8 @@ static void tearDownAutoEnforcer(PipelineRunner &AutoEnforcer) {
 
     exitOnError(Mapping.store(AutoEnforcer));
   }
+  if (not ExecutionFolder.empty())
+    exitOnError(AutoEnforcer.store(ExecutionFolder));
 }
 
 int main(int argc, const char *argv[]) {
@@ -113,8 +128,7 @@ int main(int argc, const char *argv[]) {
 
   string Msg;
   for (const auto &Library : loadLibraries) {
-    if (not sys::DynamicLibrary::LoadLibraryPermanently(Library.c_str(),
-                                                        &Msg)) {
+    if (sys::DynamicLibrary::LoadLibraryPermanently(Library.c_str(), &Msg)) {
       dbg << Msg;
       return EXIT_FAILURE;
     }

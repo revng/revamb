@@ -89,7 +89,7 @@ public:
     return Container.getModule().getFunction(LastName) != nullptr;
   }
 
-  void mergeBackDerived(DefaultLLVMContainer &ToMerge) override {
+  void mergeBackDerived(DefaultLLVMContainer &&ToMerge) override {
     Container.mergeBackDerived(ToMerge.Container);
   }
 
@@ -125,7 +125,7 @@ private:
 };
 
 template<typename LLVMContainerType>
-class LLVMContainerFactory : public BackingContainerRegistryEntry {
+class LLVMContainerFactory : public BackingContainerFactory {
 public:
   LLVMContainerFactory(llvm::LLVMContext &Context) : Context(Context) {}
 
@@ -198,14 +198,14 @@ public:
   void run(DefaultLLVMContainer &Container);
 
   template<typename OStream>
-  void dump(OStream &OS, size_t Indents = 0) const {
+  void dump(OStream &OS, size_t Indents = 0) const debug_function {
     for (const auto &Pass : Passess) {
       indent(OS, Indents);
       OS << Pass->getName().str() << "\n";
     }
   }
 
-  void dump() const { dump(dbg); }
+  void dump() const debug_function { dump(dbg); }
 
   template<typename LLVMEnforcerPass>
   void addPass(LLVMEnforcerPass Pass) {

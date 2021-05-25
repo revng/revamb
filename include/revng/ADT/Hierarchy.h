@@ -27,7 +27,6 @@ public:
   HierarchyNode &operator=(HierarchyNode &&) = delete;
   HierarchyNode &operator=(const HierarchyNode &) = delete;
   ~HierarchyNode() = default;
-  bool operator==(const HierarchyNode &Other) const { return this == &Other; }
 
   bool isa(entry_t ID) const { return id() == ID; }
 

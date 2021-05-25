@@ -15,6 +15,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
@@ -28,7 +29,7 @@ public:
   BackingContainerBase(char const *const ID) : ID(ID) {}
   virtual std::unique_ptr<BackingContainerBase>
   cloneFiltered(const TargetContainer &Targets) const = 0;
-  virtual void mergeBack(BackingContainerBase &) = 0;
+  virtual void mergeBack(BackingContainerBase &&) = 0;
   virtual bool contains(const AutoEnforcerTarget &Target) const = 0;
   virtual bool remove(const AutoEnforcerTarget &Target) = 0;
   virtual llvm::Error storeToDisk(llvm::StringRef Path) const = 0;
@@ -51,7 +52,7 @@ public:
   }
 
 protected:
-  char const *const ID;
+  char const *ID;
 };
 
 template<typename Derived>
@@ -59,91 +60,16 @@ class BackingContainer : public BackingContainerBase {
 public:
   BackingContainer() : BackingContainerBase(&Derived::ID) {}
 
-  void mergeBack(BackingContainerBase &Container) final {
+  void mergeBack(BackingContainerBase &&Container) final {
     revng_assert(llvm::isa<Derived>(Container));
-    mergeBackDerived(llvm::cast<Derived>(Container));
+    mergeBackDerived(std::move(llvm::cast<Derived>(Container)));
   }
-  virtual void mergeBackDerived(Derived &Container) = 0;
+  virtual void mergeBackDerived(Derived &&Container) = 0;
   ~BackingContainer() override = default;
 
   static bool classof(const BackingContainerBase *Base) {
     return Base->isA<Derived>();
   }
-};
-
-class StringContainer : public BackingContainer<StringContainer> {
-public:
-  using TargertContainer = BackingContainersStatus::TargetContainer;
-  ~StringContainer() override = default;
-
-  static char ID;
-
-  std::unique_ptr<BackingContainerBase>
-  cloneFiltered(const TargertContainer &Container) const final {
-    auto ToReturn = std::make_unique<StringContainer>();
-    for (const auto &Target : Container)
-      ToReturn->insert(Target);
-    return ToReturn;
-  }
-
-  void insert(const AutoEnforcerTarget &Target) {
-    ContainedStrings.insert(toString(Target));
-  }
-
-  bool contains(const AutoEnforcerTarget &Target) const final {
-    return ContainedStrings.count(toString(Target)) != 0;
-  }
-
-  void mergeBackDerived(StringContainer &Container) override {
-    for (auto &S : Container.ContainedStrings)
-      ContainedStrings.insert(S);
-  }
-
-  bool remove(const AutoEnforcerTarget &Target) override {
-    if (contains(Target))
-      return false;
-
-    ContainedStrings.erase(toString(Target));
-    return true;
-  }
-
-  llvm::Error storeToDisk(llvm::StringRef Path) const override {
-    std::error_code EC;
-    llvm::raw_fd_ostream OS(Path, EC, llvm::sys::fs::CD_CreateNew);
-    if (EC)
-      return llvm::createStringError(EC,
-                                     "Could not store to file %s",
-                                     Path.str().c_str());
-
-    for (const auto &S : ContainedStrings)
-      OS << S << "\n";
-    return llvm::Error::success();
-  }
-
-  llvm::Error loadFromDisk(llvm::StringRef Path) override {
-    std::ifstream OS;
-    OS.open(Path, std::ios::in | std::ios::trunc);
-    if (not OS.is_open())
-      return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                     "Could not load file to file %s",
-                                     Path.str().c_str());
-
-    std::string S;
-    while (getline(OS, S))
-      ContainedStrings.insert(S);
-    return llvm::Error::success();
-  }
-
-private:
-  static std::string toString(const AutoEnforcerTarget &Target) {
-    std::string ToInsert;
-    std::stringstream S(ToInsert);
-    AutoEnforcerTarget::dumpQuantifiers(S, Target.getQuantifiers());
-    S.flush();
-    return ToInsert;
-  }
-
-  std::set<std::string> ContainedStrings;
 };
 
 class BackingContainers {
@@ -163,7 +89,7 @@ public:
   void mergeBackingContainers(BackingContainers &&Other) {
     for (auto &Entry : Other.Containers) {
       revng_assert(Containers.count(Entry.first()) != 0);
-      Containers[Entry.first()]->mergeBack(*Entry.second);
+      Containers[Entry.first()]->mergeBack(std::move(*Entry.second));
     }
   }
 

@@ -189,6 +189,12 @@ EnforcerWrapper bindEnforcer(ContainerNames &&... Names) {
   return EnforcerWrapper::makeWrapper<Enforcer>(std::move(NamesList));
 }
 
+template<typename Enforcer, typename... ContainerNames>
+EnforcerWrapper bindEnforcer(Enforcer &&E, ContainerNames &&... Names) {
+  auto NamesList = { std::forward<ContainerNames>(Names)... };
+  return EnforcerWrapper(std::forward<Enforcer>(E), std::move(NamesList));
+}
+
 class Step {
 public:
   BackingContainers cloneAndRun(const BackingContainersStatus &Targets);
