@@ -8,3 +8,4 @@ Steps:
    Enforcers:
      - Name:             CopyEnforcer
        UsedContainers: [Strings1, Strings2]
+       EnabledWhen: [~EnablingFlags]

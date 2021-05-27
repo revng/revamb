@@ -13,9 +13,13 @@ llvm::Error
 PipelineLoader::parseStepDeclaration(PipelineRunner &Runner,
                                      const StepDeclaration &Declaration) const {
   Runner.addStep(Declaration.Name);
-  for (const auto &Invocation : Declaration.Enforcers)
+  for (const auto &Invocation : Declaration.Enforcers) {
+    if (not isInvocationUsed(Invocation.EnabledWhen))
+      continue;
+
     if (auto error = parseInvocation(Runner.back(), Invocation); !!error)
       return error;
+  }
 
   return Error::success();
 }
@@ -79,9 +83,13 @@ PipelineLoader::load(const PipelineDeclaration &Declaration) const {
     if (auto error = parseContainerDeclaration(ToReturn, Container); !!error)
       return move(error);
 
-  for (const auto &Step : Declaration.Steps)
+  for (const auto &Step : Declaration.Steps) {
+    if (not isInvocationUsed(Step.EnabledWhen))
+      continue;
+
     if (auto error = parseStepDeclaration(ToReturn, Step); !!error)
       return move(error);
+  }
 
   ToReturn.addStep("End");
 
@@ -99,4 +107,18 @@ PipelineLoader::load(llvm::StringRef Pipeline) const {
                              "Could not parse pipeline");
 
   return load(Declaration);
+}
+
+bool PipelineLoader::isInvocationUsed(const vector<string> &Invocation) const {
+  if (Invocation.size() == 0)
+    return true;
+
+  const auto IsStringEnabled = [this](const std::string &Name) {
+    if (not Name.starts_with("~"))
+      return EnabledFlags.count(Name) != 0;
+
+    string ActualName(Name.begin() + 1, Name.end());
+    return EnabledFlags.count(ActualName) == 0;
+  };
+  return llvm::any_of(Invocation, IsStringEnabled);
 }

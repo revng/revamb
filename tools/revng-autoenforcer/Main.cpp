@@ -47,6 +47,10 @@ static list<string> StoresOverrides("o",
                                          "target step in the target file"),
                                     cat(AutoEnforcerCategory));
 
+static list<string> EnablingFlags("f",
+                                    desc("list of pipeline enabling flags"),
+                                    cat(AutoEnforcerCategory));
+
 static opt<string> ExecutionFolder("p",
                                    desc("Folder from which all containers will "
                                         "be loaded before everything else and "
@@ -85,6 +89,7 @@ static auto getBuffer(StringRef Path) {
 
 static PipelineRunner setUpAutoEnforcer() {
   PipelineLoader Loader;
+  Loader.registerEnabledFlags(EnablingFlags);
   AutoEnforcerLibraryRegistry::registerAllContainersAndEnforcers(Loader);
 
   auto Pipeline = getBuffer(InputPipeline);

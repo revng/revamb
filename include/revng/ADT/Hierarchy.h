@@ -87,6 +87,17 @@ public:
 
   llvm::StringRef getName() const { return Name; }
 
+  size_t depth() const {
+	  size_t ToReturn  = 0;
+	  auto Current = Parent;
+	  while (Current != nullptr) 
+	  {
+			ToReturn++;
+			Current = Current->Parent;
+	  }
+	  return ToReturn;
+  }
+
 private:
   llvm::ManagedStatic<std::vector<HierarchyNode *>> Children;
   HierarchyNode *Parent;
