@@ -7,6 +7,7 @@
 #include <array>
 #include <memory>
 #include <system_error>
+#include <utility>
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
@@ -220,6 +221,45 @@ public:
 
 private:
   llvm::SmallVector<std::unique_ptr<LLVMEnforcerBaseImpl>, 3> Passess;
+};
+
+class PureLLVMEnforcer {
+public:
+  static constexpr auto Name = "PureLLVMEnforcer";
+
+  llvm::SmallVector<InputOutputContract, 0> getContract() const { return {}; }
+  void run(DefaultLLVMContainer &Container);
+
+  template<typename OStream>
+  void dump(OStream &OS, size_t Indents = 0) const debug_function {
+    for (const auto &Pass : PassNames) {
+      indent(OS, Indents);
+      OS << Pass << "\n";
+    }
+  }
+
+  static llvm::Expected<PureLLVMEnforcer>
+  create(std::vector<std::string> PassNames) {
+    for (const auto &Name : PassNames)
+      if (llvm::PassRegistry::getPassRegistry()->getPassInfo(Name) == nullptr)
+        return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                       "Could not load llvm pass %s ",
+                                       Name.c_str());
+
+    return PureLLVMEnforcer(std::move(PassNames));
+  }
+
+  PureLLVMEnforcer() = default;
+  ~PureLLVMEnforcer() = default;
+  PureLLVMEnforcer(PureLLVMEnforcer &&) = default;
+  PureLLVMEnforcer(const PureLLVMEnforcer &) = default;
+  PureLLVMEnforcer &operator=(PureLLVMEnforcer &&) = default;
+  PureLLVMEnforcer &operator=(const PureLLVMEnforcer &) = default;
+
+private:
+  PureLLVMEnforcer(std::vector<std::string> Names) :
+    PassNames(std::move(Names)) {}
+  std::vector<std::string> PassNames;
 };
 
 template<typename... LLVMEnforcerPassess>

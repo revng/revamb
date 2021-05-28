@@ -4,6 +4,8 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <cstdlib>
+
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/IR/Function.h"
@@ -16,6 +18,7 @@
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/BackingContainers.h"
 #include "revng/AutoEnforcer/CopyEnforcer.h"
+#include "revng/AutoEnforcer/LLVMEnforcer.h"
 #include "revng/AutoEnforcer/PipelineLoader.h"
 #include "revng/Enforcers/RevngEnforcers.h"
 
@@ -42,14 +45,18 @@ static list<string> ContainerOverrides("i",
                                             "step"),
                                        cat(AutoEnforcerCategory));
 
+static opt<bool> DumpPipeline("d",
+                              desc("Dump built pipeline and dont run"),
+                              cat(AutoEnforcerCategory));
+
 static list<string> StoresOverrides("o",
                                     desc("Store the target container at the "
                                          "target step in the target file"),
                                     cat(AutoEnforcerCategory));
 
 static list<string> EnablingFlags("f",
-                                    desc("list of pipeline enabling flags"),
-                                    cat(AutoEnforcerCategory));
+                                  desc("list of pipeline enabling flags"),
+                                  cat(AutoEnforcerCategory));
 
 static opt<string> ExecutionFolder("p",
                                    desc("Folder from which all containers will "
@@ -71,7 +78,14 @@ static ExitOnError exitOnError;
 class LLVMAutoEnforcerLibraryRegistry : public AutoEnforcerLibraryRegistry {
 
 public:
-  void registerContainersAndEnforcers(PipelineLoader &Loader) override {}
+  void registerContainersAndEnforcers(PipelineLoader &Loader) override {
+    auto MaybeLLVMContext = Loader.get<LLVMContext>("LLVMContext");
+    if (!MaybeLLVMContext)
+      return;
+
+    using Type = DefaultLLVMContainerFactory;
+    Loader.registerContainerFactory<Type>("LLVMContainer", **MaybeLLVMContext);
+  }
 
   void registerKinds(llvm::StringMap<Kind *> &KindDictionary) override {
     KindDictionary["Root"] = &Root;
@@ -87,8 +101,9 @@ static auto getBuffer(StringRef Path) {
   return exitOnError(errorOrToExpected(MemoryBuffer::getFileOrSTDIN(Path)));
 }
 
-static PipelineRunner setUpAutoEnforcer() {
+static PipelineRunner setUpAutoEnforcer(LLVMContext &Context) {
   PipelineLoader Loader;
+  Loader.add("LLVMContext", Context);
   Loader.registerEnabledFlags(EnablingFlags);
   AutoEnforcerLibraryRegistry::registerAllContainersAndEnforcers(Loader);
 
@@ -139,7 +154,12 @@ int main(int argc, const char *argv[]) {
     }
   }
 
-  auto AutoEnforcer = setUpAutoEnforcer();
+  LLVMContext Context;
+  auto AutoEnforcer = setUpAutoEnforcer(Context);
+  if (DumpPipeline) {
+    AutoEnforcer.dump();
+    return EXIT_SUCCESS;
+  }
   runAutoEnforcer(AutoEnforcer);
   tearDownAutoEnforcer(AutoEnforcer);
 

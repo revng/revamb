@@ -14,8 +14,11 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
+#include "llvm/PassSupport.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/YAMLTraits.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
@@ -524,6 +527,8 @@ struct IdentityPass : public llvm::ModulePass {
 
 char IdentityPass::ID = '_';
 
+static llvm::RegisterPass<IdentityPass> X2("IdentityPass", "IdentityPass");
+
 struct LLVMEnforcerPassFunctionCreator {
   static constexpr auto Name = "Function Creator";
 
@@ -560,6 +565,38 @@ BOOST_AUTO_TEST_CASE(SingleElementLLVMPipelineBackwardFinedGrained) {
              wrapLLVMPassess(CName,
                              LLVMEnforcerPassFunctionCreator(),
                              LLVMEnforcerPassFunctionIdentity()));
+  AE.addStep("End");
+
+  makeF(AE.getStartingContainer<DefaultLLVMContainer>(CName).getModule(),
+        "root");
+
+  BackingContainersStatus Targets;
+  Targets.add(CName,
+              AutoEnforcerTarget({ AutoEnforcerQuantifier("root"),
+                                   AutoEnforcerQuantifier("f1") },
+                                 FunctionKind));
+
+  auto Error = AE.run(Targets);
+  BOOST_TEST(!Error);
+
+  const auto &Final = AE.getFinalContainer<DefaultLLVMContainer>(CName);
+  const auto *F = Final.getModule().getFunction("f1");
+
+  BOOST_TEST(F != nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(LLVMPureEnforcer) {
+  llvm::LLVMContext C;
+
+  PipelineRunner AE;
+  AE.registerContainerFactory<DefaultLLVMContainerFactory>(CName, C);
+
+  auto MaybePureLLVMEnforcer = PureLLVMEnforcer::create({ "IdentityPass" });
+  BOOST_TEST((!!MaybePureLLVMEnforcer));
+
+  AE.addStep("first_step",
+             wrapLLVMPassess(CName, LLVMEnforcerPassFunctionCreator()),
+             bindEnforcer(move(*MaybePureLLVMEnforcer), CName));
   AE.addStep("End");
 
   makeF(AE.getStartingContainer<DefaultLLVMContainer>(CName).getModule(),
@@ -702,7 +739,7 @@ BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYamlLLVM) {
   Loader.registerLLVMEnforcerPass<LLVMEnforcerPassFunctionIdentity>("IdentityPa"
                                                                     "ss");
 
-  std::string Pipeline(R"(---
+  std::string LLVMPipeline(R"(---
                        Containers:
                          - Name:            CustomName
                            Type:            LLVMContainer 
@@ -717,7 +754,7 @@ BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYamlLLVM) {
                                  - IdentityPass
                        )");
 
-  auto MaybeAutoEnforcer = Loader.load(Pipeline);
+  auto MaybeAutoEnforcer = Loader.load(LLVMPipeline);
 
   BOOST_TEST(!!MaybeAutoEnforcer);
   if (!MaybeAutoEnforcer)

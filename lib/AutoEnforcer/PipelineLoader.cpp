@@ -45,10 +45,28 @@ PipelineLoader::parseLLVMPass(Step &Step,
 }
 
 llvm::Error
+PipelineLoader::parsePureLLVMPass(Step &Step,
+                                  const EnforcerInvocation &Invocation) const {
+
+  auto MaybeEnforcer = PureLLVMEnforcer::create(Invocation.Passess);
+  if (!MaybeEnforcer)
+    return MaybeEnforcer.takeError();
+
+  auto Wrapper = EnforcerWrapper(move(*MaybeEnforcer),
+                                 Invocation.UsedContainers);
+  Step.addEnforcer(move(Wrapper));
+
+  return Error::success();
+}
+
+llvm::Error
 PipelineLoader::parseInvocation(Step &Step,
                                 const EnforcerInvocation &Invocation) const {
   if (Invocation.Name == "LLVMEnforcer")
     return parseLLVMPass(Step, Invocation);
+
+  if (Invocation.Name == "PureLLVMEnforcer")
+    return parsePureLLVMPass(Step, Invocation);
 
   auto It = KnownEnforcersTypes.find(Invocation.Name);
   if (It == KnownEnforcersTypes.end())

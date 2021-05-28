@@ -45,7 +45,7 @@ find_package(LLVM REQUIRED CONFIG)
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 llvm_map_components_to_libnames(LLVM_LIBRARIES core support irreader ScalarOpts
-	linker Analysis object transformutils InstCombine CodeGen Passes BitWriter)
+	linker Analysis object transformutils InstCombine CodeGen Passes BitWriter InstCombine)
 
 # Build the support module for each architecture and in several configurations
 set(CLANG "${LLVM_TOOLS_BINARY_DIR}/clang")

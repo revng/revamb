@@ -88,6 +88,18 @@ private:
   std::set<std::string> ContainedStrings;
 };
 
+struct ExamplePass : public llvm::ModulePass {
+  static char ID;
+
+  ExamplePass() : llvm::ModulePass(ID) {}
+
+  bool runOnModule(llvm::Module &M) override { return true; }
+};
+
+char ExamplePass::ID = '_';
+
+static llvm::RegisterPass<ExamplePass> X2("ExamplePass", "ExamplePass");
+
 char StringContainer::ID;
 
 class ExampleRegistryLibrary : public AutoEnforcerLibraryRegistry {

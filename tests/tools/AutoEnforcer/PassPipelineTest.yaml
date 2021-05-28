@@ -1,0 +1,9 @@
+Containers:
+ - Name:            C1 
+   Type:            LLVMContainer 
+Steps:
+ - Name:            FirstStep
+   Enforcers:
+     - Name:             PureLLVMEnforcer 
+       UsedContainers: [C1]
+       Passess: [ExamplePass]

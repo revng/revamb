@@ -9,6 +9,10 @@ macro(add_auto_enforcer_test TestName PipelineFile Targets InputsList OutputList
 	add_test(NAME ${TestName} COMMAND revng-autoenforcer ${CMAKE_CURRENT_SOURCE_DIR}/${PipelineFile} ${Targets} -i ${InputsList} -o ${OutputList} -l $<TARGET_FILE:StringContainerLibrary> -p ${CMAKE_CURRENT_BINARY_DIR}/${TestName} -f ${Flags})
 endmacro()
 
+macro(add_auto_enforcer_dump_test TestName PipelineFile) 
+	add_test(NAME ${TestName} COMMAND revng-autoenforcer ${CMAKE_CURRENT_SOURCE_DIR}/${PipelineFile} dc:dc:Root -l $<TARGET_FILE:StringContainerLibrary> -d)
+endmacro()
+
 macro(add_auto_enforcer_test_with_output TestName PipelineFile Targets InputsList OutputList Flags ToCheckFile ExpectedOutput)
 
 	add_auto_enforcer_test(${TestName} ${PipelineFile} ${Targets} ${InputsList} ${OutputList} ${Flags})
@@ -23,6 +27,7 @@ macro(add_auto_enforcer_failing_test TestName PipelineFile Targets InputsList Ou
     set_tests_properties(${TestName} PROPERTIES WILL_FAIL TRUE)
 endmacro()
 
+
 set(CopyEnforcerTestInputs "FirstStep:Strings1:${CMAKE_CURRENT_SOURCE_DIR}/CopyEnforcerTestInput.txt")
 set(CopyEnforcerTestOutputs "End:Strings2:${CMAKE_CURRENT_BINARY_DIR}/CopyEnforcerTestOutput.txt")
 add_auto_enforcer_test_with_output(copy-enforcer-run-test CopyEnforcerTestPipeline.yaml Strings2:Root:Root ${CopyEnforcerTestInputs} ${CopyEnforcerTestOutputs} None CopyEnforcerTestOutput.txt ${CMAKE_CURRENT_SOURCE_DIR}/CopyEnforcerTestExpected.txt)
@@ -31,3 +36,7 @@ add_auto_enforcer_test_with_output(flag-autoenforcer-test CopyEnforcerTestPipeli
 
 
 add_auto_enforcer_failing_test(flag-auto-enforcer-fail-test CopyEnforcerFlagTestPipeline.yaml Strings2:Root:Root ${CopyEnforcerTestInputs} ${CopyEnforcerTestOutputs} EnablingFlags)
+
+add_auto_enforcer_failing_test(missing-pass-autoenforcer-fail-test MissingPassPipelineTest.yaml Strings2:Root:Root ${CopyEnforcerTestInputs} ${CopyEnforcerTestOutputs} DontCare)
+
+add_auto_enforcer_dump_test(llvm-pass-test PassPipelineTest.yaml) 

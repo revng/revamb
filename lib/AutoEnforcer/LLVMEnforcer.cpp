@@ -2,6 +2,9 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include "llvm/PassRegistry.h"
+#include "llvm/PassSupport.h"
+
 #include "revng/AutoEnforcer/LLVMEnforcer.h"
 
 using namespace std;
@@ -33,6 +36,16 @@ SmallVector<InputOutputContract, 3> LLVMEnforcer::getContract() const {
       Contract.push_back(C);
 
   return Contract;
+}
+
+void PureLLVMEnforcer::run(DefaultLLVMContainer &Container) {
+  legacy::PassManager Manager;
+  auto *Registry = PassRegistry::getPassRegistry();
+  for (const auto &Element : PassNames) {
+
+    Manager.add(Registry->getPassInfo(Element)->createPass());
+  }
+  Manager.run(Container.getModule());
 }
 
 void LLVMEnforcer::run(DefaultLLVMContainer &Container) {
