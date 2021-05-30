@@ -67,17 +67,6 @@ using std::string;
 
 // Register all the arguments
 
-// TODO: linking-info-path?
-static cl::opt<string> LinkingInfoPath("linking-info",
-                                       cl::desc("destination path for the CSV "
-                                                "containing linking info"),
-                                       cl::value_desc("path"),
-                                       cl::cat(MainCategory));
-static cl::alias A2("i",
-                    cl::desc("Alias for -linking-info"),
-                    cl::aliasopt(LinkingInfoPath),
-                    cl::cat(MainCategory));
-
 // Enable Debug Options to be specified on the command line
 namespace DIT = DebugInfoType;
 static auto X = cl::values(clEnumValN(DIT::None,
@@ -232,12 +221,6 @@ CodeGenerator::CodeGenerator(BinaryFile &Binary,
 
   EarlyLinkedModule = parseIR(EarlyLinked, Context);
 
-  // Prepare the linking info CSV
-  if (LinkingInfoPath.size() == 0)
-    LinkingInfoPath = OutputPath + ".li.csv";
-  std::ofstream LinkingInfoStream(LinkingInfoPath);
-  LinkingInfoStream << "name,start,end\n";
-
   auto *Uint8Ty = Type::getInt8Ty(Context);
   auto *ElfHeaderHelper = new GlobalVariable(*TheModule,
                                              Uint8Ty,
@@ -338,19 +321,7 @@ CodeGenerator::CodeGenerator(BinaryFile &Binary,
     // Force alignment to 1 and assign the variable to a specific section
     Segment.Variable->setAlignment(MaybeAlign(1));
     Segment.Variable->setSection("." + Name);
-
-    // Write the linking info CSV
-    LinkingInfoStream << "." << Name << ",0x" << std::hex
-                      << Segment.StartVirtualAddress.address() << ",0x"
-                      << std::hex << Segment.EndVirtualAddress.address()
-                      << "\n";
   }
-
-  // Write needed libraries CSV
-  std::string NeededLibs = OutputPath + ".need.csv";
-  std::ofstream NeededLibsStream(NeededLibs);
-  for (const std::string &Library : Binary.neededLibraryNames())
-    NeededLibsStream << Library << "\n";
 }
 
 static BasicBlock *replaceFunction(Function *ToReplace) {
