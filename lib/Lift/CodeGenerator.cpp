@@ -1287,8 +1287,21 @@ void CodeGenerator::translate(Optional<uint64_t> RawVirtualAddress) {
   PostInstCombinePM.add(new PruneRetSuccessors);
   PostInstCombinePM.run(*TheModule);
 
-  // Serialize an empty Model into TheModule
+  //
+  // Populate and serialize the model into TheModule
+  //
   model::Binary Model;
+
+  // Populate the segments' list
+  for (const SegmentInfo &Segment : Binary.segments()) {
+    model::Segment &ModelSegment = Model.Segments[Segment.StartVirtualAddress];
+    ModelSegment.End = Segment.EndVirtualAddress;
+    ModelSegment.Name = Segment.generateName();
+  }
+
+  for (const std::string &Library : Binary.neededLibraryNames())
+    Model.ImportedLibraries.insert(Library);
+
   writeModel(Model, *TheModule);
 
   JumpTargets.finalizeJumpTargets();
