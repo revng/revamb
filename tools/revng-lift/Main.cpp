@@ -33,6 +33,8 @@
 #include "revng/Lift/PTCInterface.h"
 #include "revng/Support/CommandLine.h"
 #include "revng/Support/Debug.h"
+#include "revng/Support/DebugHelper.h"
+#include "revng/Support/OriginalAssemblyAnnotationWriter.h"
 #include "revng/Support/ResourceFinder.h"
 #include "revng/Support/Statistics.h"
 #include "revng/Support/revng.h"
@@ -133,5 +135,24 @@ int main(int argc, const char *argv[]) {
 
   std::ofstream OutputStream(OutputPath);
   llvm::raw_os_ostream LLVMOutputStream(OutputStream);
-  M->print(LLVMOutputStream, nullptr);
+  OriginalAssemblyAnnotationWriter OAAW(M->getContext());
+
+  switch (DebugInfo) {
+  case DebugInfoType::None:
+    break;
+
+  case DebugInfoType::OriginalAssembly:
+    createOriginalAssemblyDebugInfo(M, OutputPath);
+    break;
+
+  case DebugInfoType::PTC:
+    createPTCDebugInfo(M, OutputPath);
+    break;
+
+  case DebugInfoType::LLVMIR:
+    createSelfReferencingDebugInfo(M, OutputPath, &OAAW);
+    break;
+  }
+
+  M->print(LLVMOutputStream, &OAAW);
 }
