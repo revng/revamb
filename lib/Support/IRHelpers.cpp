@@ -136,3 +136,36 @@ std::pair<MetaAddress, uint64_t> getPC(Instruction *TheInstruction) {
   revng_assert(Size != 0);
   return { PC, Size };
 }
+
+/// Boring code to get the text of the metadata with the specified kind
+/// associated to the given instruction
+StringRef getText(const Instruction *I, unsigned Kind) {
+  revng_assert(I != nullptr);
+
+  Metadata *MD = I->getMetadata(Kind);
+
+  if (MD == nullptr)
+    return StringRef();
+
+  auto Node = dyn_cast<MDNode>(MD);
+
+  revng_assert(Node != nullptr);
+
+  const MDOperand &Operand = Node->getOperand(0);
+
+  Metadata *MDOperand = Operand.get();
+
+  if (MDOperand == nullptr)
+    return StringRef();
+
+  if (auto *String = dyn_cast<MDString>(MDOperand)) {
+    return String->getString();
+  } else if (auto *CAM = dyn_cast<ConstantAsMetadata>(MDOperand)) {
+    auto *Cast = cast<ConstantExpr>(CAM->getValue());
+    auto *GV = cast<GlobalVariable>(Cast->getOperand(0));
+    auto *Initializer = GV->getInitializer();
+    return cast<ConstantDataArray>(Initializer)->getAsString().drop_back();
+  } else {
+    revng_abort();
+  }
+}
