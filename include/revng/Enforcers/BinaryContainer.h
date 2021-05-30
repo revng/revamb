@@ -8,35 +8,41 @@
 #include "revng/Support/Assert.h"
 
 namespace AutoEnforcer {
+
+// WIP: rename to temporary file
 class BinaryContainer : public BackingContainer<BinaryContainer> {
+private:
+  llvm::SmallString<32> Path;
+
 public:
-  BinaryContainer() = default;
-  ~BinaryContainer() override = default;
+  BinaryContainer();
+  BinaryContainer(BinaryContainer &&);
+  ~BinaryContainer() override;
+  BinaryContainer(const BinaryContainer &) = delete;
+
   using TargetContainer = BackingContainersStatus::TargetContainer;
 
   std::unique_ptr<BackingContainerBase>
-  cloneFiltered(const TargetContainer &Container) const final {
-    revng_abort("Not implemented!!! you have to tell me how to clone the "
-                "particular "
-                "targets, i guess in case of a binary means clone us all");
-    return nullptr;
-  }
+  cloneFiltered(const TargetContainer &Container) const final;
 
   bool contains(const AutoEnforcerTarget &Target) const final {
-    revng_abort("Not implemented!!! you have to tell me how check if a "
-                "particular target exists");
-    return false;
+    return not Path.empty();
   }
 
-  void mergeBackDerived(BinaryContainer &&Container) override {
-    revng_abort("You have to tell me how to merge back the a binary "
-                "container into this one, probably a binary can only be "
-                "used as a source and this should never be used?");
-  }
+  bool remove(const AutoEnforcerTarget &Target) final { revng_abort(); }
+
+  void mergeBackDerived(BinaryContainer &&Container) override;
+
+  llvm::Error storeToDisk(llvm::StringRef Path) const override;
+
+  llvm::Error loadFromDisk(llvm::StringRef Path) override;
 
   static char ID;
 
-private:
+public:
+  llvm::StringRef path() const { return llvm::StringRef(Path); }
+
+  void dump() const debug_function { dbg << Path.data() << "\n"; }
 };
 
 } // namespace AutoEnforcer

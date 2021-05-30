@@ -149,12 +149,12 @@ static std::unique_ptr<Module> parseIR(StringRef Path, LLVMContext &Context) {
 
 CodeGenerator::CodeGenerator(BinaryFile &Binary,
                              Architecture &Target,
-                             llvm::LLVMContext &TheContext,
+                             llvm::Module *TheModule,
                              std::string Helpers,
                              std::string EarlyLinked) :
   TargetArchitecture(std::move(Target)),
-  Context(TheContext),
-  TheModule(new Module("top", Context)),
+  TheModule(TheModule),
+  Context(TheModule->getContext()),
   Binary(Binary) {
 
   OriginalInstrMDKind = Context.getMDKindID("oi");
@@ -194,7 +194,7 @@ CodeGenerator::CodeGenerator(BinaryFile &Binary,
                                        Binary.architecture().pointerSize());
   auto createConstGlobal = [this, &RegisterType](const Twine &Name,
                                                  uint64_t Value) {
-    return new GlobalVariable(*TheModule,
+    return new GlobalVariable(*this->TheModule,
                               RegisterType,
                               true,
                               GlobalValue::ExternalLinkage,
@@ -796,9 +796,7 @@ void CodeGenerator::translate(Optional<uint64_t> RawVirtualAddress) {
 
     return Variables.getByEnvOffset(Offset, Name.str()).first;
   };
-  PCHOwner PCH = ProgramCounterHandler::create(Arch.type(),
-                                               TheModule.get(),
-                                               Factory);
+  PCHOwner PCH = ProgramCounterHandler::create(Arch.type(), TheModule, Factory);
 
   IRBuilder<> Builder(Context);
 
@@ -809,7 +807,7 @@ void CodeGenerator::translate(Optional<uint64_t> RawVirtualAddress) {
   auto *MainFunction = Function::Create(MainType,
                                         Function::ExternalLinkage,
                                         "root",
-                                        TheModule.get());
+                                        TheModule);
   FunctionTags::Root.addTo(MainFunction);
 
   // Create the first basic block and create a placeholder for variable
@@ -903,7 +901,7 @@ void CodeGenerator::translate(Optional<uint64_t> RawVirtualAddress) {
     PCH->initializePC(Builder, VirtualAddress);
   }
 
-  OpaqueIdentity OI(TheModule.get());
+  OpaqueIdentity OI(TheModule);
 
   // Fake jumps to the dispatcher-related basic blocks. This way all the blocks
   // are always reachable.

@@ -44,7 +44,7 @@ public:
   /// \param Helpers path of the LLVM IR file containing the QEMU helpers.
   CodeGenerator(BinaryFile &Binary,
                 Architecture &Target,
-                llvm::LLVMContext &TheContext,
+                llvm::Module *TheModule,
                 std::string Helpers,
                 std::string EarlyLinked);
 
@@ -71,8 +71,8 @@ private:
 
 private:
   Architecture TargetArchitecture;
+  llvm::Module *TheModule;
   llvm::LLVMContext &Context;
-  std::unique_ptr<llvm::Module> TheModule;
   std::unique_ptr<llvm::Module> HelpersModule;
   std::unique_ptr<llvm::Module> EarlyLinkedModule;
   BinaryFile &Binary;

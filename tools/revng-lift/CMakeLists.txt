@@ -6,4 +6,4 @@ revng_add_executable(revng-lift
   Main.cpp)
 
 target_link_libraries(revng-lift
-	revngLift)
+  revngEnforcers)

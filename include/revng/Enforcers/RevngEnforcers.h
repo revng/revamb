@@ -31,19 +31,6 @@ extern Kind ABIEnforced;
 
 extern Kind Dead;
 
-class LiftEnforcer {
-public:
-  static constexpr auto Name = "Lift Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return { InputOutputContract(Binary, KindExactness::Exact, 0, Root, 1) };
-  }
-
-  void run(const BinaryContainer &SourceBinary,
-           DefaultLLVMContainer &TargetContainer) {
-    revng_abort("Not implemented");
-  }
-};
-
 class CFEPEnforcer {
 public:
   static constexpr auto Name = "CFepper Enforcer";

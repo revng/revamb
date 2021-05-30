@@ -4,9 +4,11 @@
 
 revng_add_library_internal(revngEnforcers SHARED
   BinaryContainer.cpp
+  Lift.cpp
   RevngEnforcers.cpp)
 
 target_link_libraries(revngEnforcers
   revngSupport
+  revngLift
   revngAutoEnforcer
   ${LLVM_LIBRARIES})
