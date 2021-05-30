@@ -2041,3 +2041,13 @@ BinaryFile::nameForAddress(MetaAddress Address, uint64_t Size) const {
   Address.dump(Result);
   return Result.str();
 }
+
+std::string SegmentInfo::generateName() const {
+  // Create name from start and size
+  std::stringstream NameStream;
+  NameStream << "o_" << (IsReadable ? "r" : "") << (IsWriteable ? "w" : "")
+             << (IsExecutable ? "x" : "") << "_0x" << std::hex
+             << StartVirtualAddress.address();
+
+  return NameStream.str();
+}

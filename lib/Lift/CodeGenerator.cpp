@@ -353,16 +353,6 @@ CodeGenerator::CodeGenerator(BinaryFile &Binary,
     NeededLibsStream << Library << "\n";
 }
 
-std::string SegmentInfo::generateName() {
-  // Create name from start and size
-  std::stringstream NameStream;
-  NameStream << "o_" << (IsReadable ? "r" : "") << (IsWriteable ? "w" : "")
-             << (IsExecutable ? "x" : "") << "_0x" << std::hex
-             << StartVirtualAddress.address();
-
-  return NameStream.str();
-}
-
 static BasicBlock *replaceFunction(Function *ToReplace) {
   // Save metadata
   SmallVector<std::pair<unsigned, MDNode *>, 4> SavedMetadata;

@@ -51,7 +51,7 @@ struct SegmentInfo {
     IsReadable(false) {}
 
   /// Produce a name for this segment suitable for human understanding
-  std::string generateName();
+  std::string generateName() const;
 
   bool contains(MetaAddress Address) const {
     return (StartVirtualAddress.addressLowerThanOrEqual(Address)
