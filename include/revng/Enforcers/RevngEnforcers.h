@@ -10,9 +10,9 @@
 
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/BackingContainers.h"
-#include "revng/AutoEnforcer/BinaryContainer.h"
 #include "revng/AutoEnforcer/InputOutputContract.h"
 #include "revng/AutoEnforcer/LLVMEnforcer.h"
+#include "revng/Enforcers/BinaryContainer.h"
 namespace Model {
 
 extern Granularity RootGranularity;

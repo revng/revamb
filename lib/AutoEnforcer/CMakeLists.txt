@@ -10,8 +10,6 @@ revng_add_library_internal(revngAutoEnforcer
   Step.cpp
   InputOutputContract.cpp
   BackingContainers.cpp
-  BinaryContainer.cpp
-  RevngEnforcers.cpp
   AutoEnforcer.cpp)
 
 target_link_libraries(revngModel

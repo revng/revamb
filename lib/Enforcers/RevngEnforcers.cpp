@@ -3,7 +3,7 @@
 //
 
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
-#include "revng/AutoEnforcer/RevngEnforcers.h"
+#include "revng/Enforcers/RevngEnforcers.h"
 
 using namespace Model;
 using namespace std;
