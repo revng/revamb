@@ -29,9 +29,13 @@ struct IdentityKeyedObjectTraits {
   static T fromKey(T Obj) { return Obj; }
 };
 
-/// Trivial specialization for integral types
+/// Trivial specializations
 template<Integral T>
 struct KeyedObjectTraits<T> : public IdentityKeyedObjectTraits<T> {};
+
+template<>
+struct KeyedObjectTraits<std::string>
+  : public IdentityKeyedObjectTraits<std::string> {};
 
 static_assert(Integral<int>);
 static_assert(HasKeyObjectTraits<int>);
