@@ -99,8 +99,8 @@ InputOutputContract::backwardInputContract(const AutoEnforcerTarget &O) const {
 }
 
 void InputOutputContract::forwardGranularity(AutoEnforcerTarget &Input) const {
-  const auto *InputGranularity = Source->get();
-  const auto *OutputGranularity = Target != nullptr ? Target->get() :
+  const auto *InputGranularity = Source->Granularity;
+  const auto *OutputGranularity = Target != nullptr ? Target->Granularity :
                                                       InputGranularity;
   if (InputGranularity == OutputGranularity)
     return;
@@ -134,8 +134,8 @@ void InputOutputContract::forwardGranularity(AutoEnforcerTarget &Input) const {
 }
 
 void InputOutputContract::backwardGranularity(AutoEnforcerTarget &Out) const {
-  const auto *InputGranularity = Source->get();
-  const auto *OutputGranularity = Target != nullptr ? Target->get() :
+  const auto *InputGranularity = Source->Granularity;
+  const auto *OutputGranularity = Target != nullptr ? Target->Granularity :
                                                       InputGranularity;
   if (InputGranularity == OutputGranularity)
     return;

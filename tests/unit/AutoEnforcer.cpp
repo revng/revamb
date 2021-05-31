@@ -176,9 +176,9 @@ BOOST_AUTO_TEST_CASE(InputOutputContractExactPassForward) {
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractExactExactForward) {
+  std::cout << "Here";
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind);
-
   InputOutputContract Contract1(RootKind,
                                 KindExactness::Exact,
                                 0,

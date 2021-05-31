@@ -22,12 +22,26 @@
 #include "revng/Support/Debug.h"
 
 namespace AutoEnforcer {
-namespace detail {
-struct EmptySturct {};
-}; // namespace detail
+struct Granularity : public HierarchyNode<Granularity> {
+public:
+  Granularity(llvm::StringRef Name) : HierarchyNode(Name) {}
+  Granularity(llvm::StringRef Name, Granularity &Parent) :
+    HierarchyNode<Granularity>(Name, Parent) {}
+};
 
-using Granularity = HierarchyNode<detail::EmptySturct>;
-using Kind = HierarchyNode<Granularity *>;
+struct Kind : public HierarchyNode<Kind> {
+public:
+  Kind(llvm::StringRef Name, Granularity *Granularity) :
+    HierarchyNode<Kind>(Name), Granularity(Granularity) {
+    revng_assert(Granularity != nullptr);
+  }
+  Kind(llvm::StringRef Name, Kind &Parent, Granularity *Granularity) :
+    HierarchyNode<Kind>(Name, Parent), Granularity(Granularity) {
+    revng_assert(Granularity != nullptr);
+  }
+
+  Granularity *Granularity;
+};
 
 enum class KindExactness { Exact, DerivedFrom };
 

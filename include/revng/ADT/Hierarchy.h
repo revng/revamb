@@ -12,13 +12,12 @@
 
 using entry_t = size_t;
 
-template<typename T>
+template<typename DerivedType>
 class HierarchyNode {
 public:
-  HierarchyNode(llvm::StringRef Name, T Value = T()) :
-    Value(std::move(Value)), Name(Name.str()) {}
-  HierarchyNode(llvm::StringRef Name, HierarchyNode &Parent, T Value = T()) :
-    Value(std::move(Value)), Name(Name.str()) {
+  HierarchyNode(llvm::StringRef Name) : Name(Name.str()) {}
+  HierarchyNode(llvm::StringRef Name, HierarchyNode &Parent) :
+    Name(Name.str()) {
     Parent.Children->push_back(this);
   }
 
@@ -30,11 +29,8 @@ public:
 
   bool isa(entry_t ID) const { return id() == ID; }
 
-  const T &operator*() const { return Value; }
-  T &operator*() { return Value; }
-
-  const T &get() const { return Value; }
-  T &get() { return Value; }
+  const DerivedType &self() const { return *static_cast<DerivedType *>(this); }
+  DerivedType &self() { return *static_cast<DerivedType *>(this); }
 
   bool ancestorOf(const HierarchyNode &MaybeChild) const {
     return ancestorOf(MaybeChild.id());
@@ -58,17 +54,35 @@ public:
     return ID;
   }
 
-  HierarchyNode *getParent() { return Parent; }
-  const HierarchyNode *getParent() const { return Parent; }
+  DerivedType *getParent() {
+    if (not Parent)
+      return nullptr;
+    return &Parent->self();
+  }
+  const DerivedType *getParent() const {
+    if (not Parent)
+      return nullptr;
+    return &Parent->self();
+  }
 
-  HierarchyNode *getRootAncestor() {
+  DerivedType *getRootAncestor() {
     HierarchyNode *LastAncestor = this;
     HierarchyNode *NextAncestor = Parent;
     while (NextAncestor != nullptr) {
       LastAncestor = NextAncestor;
       NextAncestor = NextAncestor->getParent();
     }
-    return LastAncestor;
+    return &LastAncestor->self();
+  }
+
+  const DerivedType *getRootAncestor() const {
+    HierarchyNode *LastAncestor = this;
+    HierarchyNode *NextAncestor = Parent;
+    while (NextAncestor != nullptr) {
+      LastAncestor = NextAncestor;
+      NextAncestor = NextAncestor->getParent();
+    }
+    return &LastAncestor->self();
   }
 
   void dump(size_t Indent = 0) {
@@ -102,6 +116,5 @@ private:
   HierarchyNode *Parent;
   entry_t Start;
   entry_t End;
-  T Value;
   std::string Name;
 };

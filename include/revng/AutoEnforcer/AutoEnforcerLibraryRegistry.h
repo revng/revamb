@@ -21,7 +21,7 @@ public:
 
     for (auto &Kind : KindDictionary) {
       Kind.second->getRootAncestor()->assign();
-      Kind.second->get()->getRootAncestor()->assign();
+      Kind.second->Granularity->getRootAncestor()->assign();
     }
   }
 
