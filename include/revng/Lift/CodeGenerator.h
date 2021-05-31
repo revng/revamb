@@ -31,8 +31,6 @@ class ObjectFile;
 
 }; // namespace llvm
 
-class DebugHelper;
-
 /// Translator from binary code to LLVM IR.
 class CodeGenerator {
 public:
@@ -47,21 +45,15 @@ public:
   CodeGenerator(BinaryFile &Binary,
                 Architecture &Target,
                 llvm::LLVMContext &TheContext,
-                std::string Output,
                 std::string Helpers,
                 std::string EarlyLinked);
 
   ~CodeGenerator();
 
   /// \brief Creates an LLVM function for the code in the specified memory area.
-  /// If debug information has been requested, the debug source files will be
-  /// create in this phase.
   ///
   /// \param VirtualAddress the address from where the translation should start.
   void translate(llvm::Optional<uint64_t> RawVirtualAddress);
-
-  /// Serialize the generated LLVM IR to the specified output path.
-  void serialize();
 
 private:
   /// \brief Parse the ELF headers.
@@ -83,8 +75,6 @@ private:
   std::unique_ptr<llvm::Module> TheModule;
   std::unique_ptr<llvm::Module> HelpersModule;
   std::unique_ptr<llvm::Module> EarlyLinkedModule;
-  std::string OutputPath;
-  std::unique_ptr<DebugHelper> Debug;
   BinaryFile &Binary;
 
   unsigned OriginalInstrMDKind;

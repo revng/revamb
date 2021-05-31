@@ -48,7 +48,6 @@
 #include "revng/Model/SerializeModelPass.h"
 #include "revng/Support/CommandLine.h"
 #include "revng/Support/Debug.h"
-#include "revng/Support/DebugHelper.h"
 #include "revng/Support/FunctionTags.h"
 #include "revng/Support/ProgramCounterHandler.h"
 #include "revng/Support/revng.h"
@@ -66,43 +65,6 @@ using std::make_pair;
 using std::string;
 
 // Register all the arguments
-
-// Enable Debug Options to be specified on the command line
-namespace DIT = DebugInfoType;
-static auto X = cl::values(clEnumValN(DIT::None,
-                                      "none",
-                                      "no debug information"),
-                           clEnumValN(DIT::OriginalAssembly,
-                                      "asm",
-                                      "debug information referred to the "
-                                      "assembly "
-                                      "of the input file"),
-                           clEnumValN(DIT::PTC,
-                                      "ptc",
-                                      "debug information referred to the "
-                                      "Portable "
-                                      "Tiny Code"),
-                           clEnumValN(DIT::LLVMIR,
-                                      "ll",
-                                      "debug information referred to the LLVM "
-                                      "IR"));
-static cl::opt<DIT::Values> DebugInfo("debug-info",
-                                      cl::desc("emit debug information"),
-                                      X,
-                                      cl::cat(MainCategory),
-                                      cl::init(DIT::LLVMIR));
-
-static cl::alias A6("g",
-                    cl::desc("Alias for -debug-info"),
-                    cl::aliasopt(DebugInfo),
-                    cl::cat(MainCategory));
-
-// TODO: is this still active?
-static cl::opt<string> DebugPath("debug-path",
-                                 cl::desc("destination path for the generated "
-                                          "debug source"),
-                                 cl::value_desc("path"),
-                                 cl::cat(MainCategory));
 
 static cl::opt<bool> RecordPTC("record-ptc",
                                cl::desc("create metadata for PTC"),
@@ -188,14 +150,11 @@ static std::unique_ptr<Module> parseIR(StringRef Path, LLVMContext &Context) {
 CodeGenerator::CodeGenerator(BinaryFile &Binary,
                              Architecture &Target,
                              llvm::LLVMContext &TheContext,
-                             std::string Output,
                              std::string Helpers,
                              std::string EarlyLinked) :
   TargetArchitecture(std::move(Target)),
   Context(TheContext),
   TheModule(new Module("top", Context)),
-  OutputPath(Output),
-  Debug(new DebugHelper(Output, TheModule.get(), DebugInfo, DebugPath)),
   Binary(Binary) {
 
   OriginalInstrMDKind = Context.getMDKindID("oi");
@@ -1288,15 +1247,4 @@ void CodeGenerator::translate(Optional<uint64_t> RawVirtualAddress) {
   JumpOutHandler.createExternalJumpsHandler();
 
   Variables.finalize();
-
-  Debug->generateDebugInfo();
-}
-
-void CodeGenerator::serialize() {
-  // Ask the debug handler if it already has a good copy of the IR, if not dump
-  // it
-  if (!Debug->copySource()) {
-    std::ofstream Output(OutputPath);
-    Debug->print(Output, false);
-  }
 }

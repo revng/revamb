@@ -172,7 +172,6 @@ int main(int argc, const char *argv[]) {
   CodeGenerator Generator(TheBinary,
                           TargetArchitecture,
                           Context,
-                          std::string(OutputPath),
                           LibHelpersPath,
                           EarlyLinkedPath);
 
@@ -180,7 +179,6 @@ int main(int argc, const char *argv[]) {
   if (EntryPointAddress.getNumOccurrences() != 0)
     EntryPointAddressOptional = EntryPointAddress;
   Generator.translate(EntryPointAddressOptional);
-  Generator.serialize();
 
   return EXIT_SUCCESS;
 }
