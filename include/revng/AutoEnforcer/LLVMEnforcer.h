@@ -41,6 +41,9 @@ public:
 
   void mergeBackDerived(LLVMContainer &ToMerge) {
     llvm::Linker TheLinker(*Module);
+
+    // WIP: drop body of stuff that it's already there
+
     bool Result = TheLinker.linkInModule(std::move(ToMerge.Module),
                                          llvm::Linker::OverrideFromSrc);
     revng_assert(!Result, "Linker failed");

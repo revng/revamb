@@ -87,10 +87,7 @@ public:
     Loader.registerContainerFactory<Type>("LLVMContainer", **MaybeLLVMContext);
   }
 
-  void registerKinds(llvm::StringMap<Kind *> &KindDictionary) override {
-    KindDictionary["Root"] = &Root;
-    KindDictionary["Isolated"] = &Isolated;
-  }
+  void registerKinds(llvm::StringMap<Kind *> &KindDictionary) override {}
 
   ~LLVMAutoEnforcerLibraryRegistry() override = default;
 };

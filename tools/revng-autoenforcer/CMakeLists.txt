@@ -5,6 +5,7 @@
 revng_add_executable(revng-autoenforcer
   Main.cpp)
 
+# WIP: should not depend on revngLift
 target_link_libraries(revng-autoenforcer
   revngEnforcers
-	revngAutoEnforcer)
+  revngAutoEnforcer)

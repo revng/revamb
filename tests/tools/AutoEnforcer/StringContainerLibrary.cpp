@@ -1,11 +1,13 @@
 #include "revng/AutoEnforcer/AutoEnforcerLibraryRegistry.h"
 #include "revng/AutoEnforcer/CopyEnforcer.h"
-#include "revng/AutoEnforcer/RevngEnforcers.h"
 
 using std::string;
 using namespace llvm;
 using namespace llvm::cl;
 using namespace AutoEnforcer;
+
+static Granularity RootGranularity("Root Granularity");
+static Kind Root("Root", &RootGranularity);
 
 class StringContainer : public BackingContainer<StringContainer> {
 public:
@@ -112,7 +114,9 @@ public:
                             CopyEnforcer<StringContainer>(Root));
   }
 
-  void registerKinds(llvm::StringMap<Kind *> &KindDictionary) override {}
+  void registerKinds(llvm::StringMap<Kind *> &KindDictionary) override {
+    KindDictionary["Root"] = &Root;
+  }
 
   ~ExampleRegistryLibrary() override = default;
 };

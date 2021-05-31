@@ -26,6 +26,7 @@ public:
   cloneFiltered(const TargetContainer &Container) const final;
 
   bool contains(const AutoEnforcerTarget &Target) const final {
+    // WIP: more to check?
     return not Path.empty();
   }
 

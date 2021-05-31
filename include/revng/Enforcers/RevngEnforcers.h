@@ -4,6 +4,8 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+// WIP: split up
+
 #include <array>
 
 #include "llvm/IR/LegacyPassManager.h"
@@ -15,6 +17,8 @@
 
 namespace AutoEnforcer {
 
+class BinaryContainer;
+
 extern Granularity RootGranularity;
 extern Granularity FunctionsGranularity;
 
@@ -22,7 +26,6 @@ extern Kind CFepper;
 extern Kind Binary;
 extern Kind Root;
 extern Kind RootIsolated;
-extern Kind Support;
 extern Kind Object;
 extern Kind Translated;
 
@@ -43,47 +46,8 @@ public:
   void registerPassess(llvm::legacy::PassManager &Manager) {}
 };
 
-class LLCEnforcer {
-public:
-  static constexpr auto Name = "LLC Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return {
-      InputOutputContract(Root, KindExactness::DerivedFrom, 0, Object, 1)
-    };
-  }
-  void
-  run(DefaultLLVMContainer &TargetContainer, BinaryContainer &TargetBinary) {
-    revng_abort("Not implemented");
-  }
-};
-
-class LinkSupportEnforcer {
-public:
-  static constexpr auto Name = "LLVM Link Support Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return {
-      InputOutputContract(Root, KindExactness::Exact, 0, Support, true)
-    };
-  }
-  void run(DefaultLLVMContainer &TargetContainer) {
-    revng_abort("Not implemented");
-  }
-};
-
-class LinkEnoforcer {
-public:
-  static constexpr auto Name = "Link Enforcer";
-  std::array<InputOutputContract, 2> getContract() const {
-    return { InputOutputContract(Support, KindExactness::Exact, 0, Object, 1),
-             InputOutputContract(Root, KindExactness::Exact, 0, Dead) };
-  }
-  void run(DefaultLLVMContainer &SourceBinary, BinaryContainer &Binary) {
-    revng_abort("Not implemented, i guess here we need a container with "
-                "multiple objects files in it?");
-  }
-};
-
-class LinkEnoforcerWithFunctions {
+#if 0
+class LinkEnforcerWithFunctions {
 public:
   static constexpr auto Name = "Link Enforcer";
   std::array<InputOutputContract, 3> getContract() const {
@@ -167,5 +131,7 @@ public:
     revng_abort("Not implemented");
   }
 };
+
+#endif
 
 } // namespace AutoEnforcer

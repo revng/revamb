@@ -1,3 +1,5 @@
+// WIP
+
 //
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
@@ -15,7 +17,6 @@ Granularity
 Kind AutoEnforcer::Binary("Binary Kind", &RootGranularity);
 Kind AutoEnforcer::Root("Root kind", &RootGranularity);
 Kind AutoEnforcer::RootIsolated("Root Isolated Kind", Root, &RootGranularity);
-Kind AutoEnforcer::Support("Support Kind", &RootGranularity);
 Kind AutoEnforcer::Object("Object File Kind", &RootGranularity);
 Kind AutoEnforcer::Translated("Translated Kind", &RootGranularity);
 Kind AutoEnforcer::Dead("Dead Kind", &RootGranularity);
