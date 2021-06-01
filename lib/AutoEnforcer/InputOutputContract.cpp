@@ -250,7 +250,7 @@ void InputOutputContract::insertDefaultInput(BCS &Status,
   auto &SourceContainerTargets = Status[Names[EnforcerArgumentSourceIndex]];
 
   llvm::SmallVector<AutoEnforcerQuantifier, 3>
-    Quantifiers(Source->Granularity->depth(), AutoEnforcerQuantifier());
+    Quantifiers(Source->Granularity->depth() + 1, AutoEnforcerQuantifier());
 
   AutoEnforcerTarget Target(move(Quantifiers), *Source, InputContract);
   SourceContainerTargets.push_back(move(Target));

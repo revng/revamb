@@ -80,7 +80,7 @@ int main(int argc, const char *argv[]) {
 
   // Establish goals
   BackingContainersStatus Targets;
-  Targets.add(Lifted,
+  Targets.add(TranslatedBinary,
               AutoEnforcerTarget({ AutoEnforcerQuantifier("root") },
                                  Translated));
 
