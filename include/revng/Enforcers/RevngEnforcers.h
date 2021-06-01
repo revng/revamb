@@ -37,10 +37,8 @@ extern Kind Dead;
 class CFEPEnforcer {
 public:
   static constexpr auto Name = "CFepper Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return {
-      InputOutputContract(Root, KindExactness::Exact, 0, CFepper, true)
-    };
+  std::array<AtomicContract, 1> getContract() const {
+    return { AtomicContract(Root, KindExactness::Exact, 0, CFepper, true) };
   }
 
   void registerPassess(llvm::legacy::PassManager &Manager) {}
@@ -50,10 +48,10 @@ public:
 class LinkEnforcerWithFunctions {
 public:
   static constexpr auto Name = "Link Enforcer";
-  std::array<InputOutputContract, 3> getContract() const {
-    return { InputOutputContract(Support, KindExactness::Exact, 0, Object, 1),
+  std::array<AtomicContract,1> getContract() const {
+    return {AtomicContract({ InputOutputContract(Support, KindExactness::Exact, 0, Object, 1),
              InputOutputContract(Root, KindExactness::Exact, 0, Dead),
-             InputOutputContract(Isolated, KindExactness::Exact, 0, Dead) };
+             InputOutputContract(Isolated, KindExactness::Exact, 0, Dead) })};
   }
   void run(DefaultLLVMContainer &SourceBinary, BinaryContainer &Binary) {
     revng_abort("Not implemented, i guess here we need a container with "
@@ -64,7 +62,7 @@ public:
 class O2Enforcer {
 public:
   static constexpr auto Name = "02 Enforcer";
-  std::array<InputOutputContract, 0> getContract() const { return {}; }
+  std::array<AtomicContract, 0> getContract() const { return {}; }
 
   void registerPassess(llvm::legacy::PassManager &Manager) {
     revng_abort("Not implemented");
@@ -74,18 +72,18 @@ public:
 class LLCRootEnforcer {
 public:
   static constexpr auto Name = "LLC Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return {
-      InputOutputContract(Root, KindExactness::DerivedFrom, 0, Object, 1)
-    };
+  std::array<AtomicContract, 1> getContract() const {
+    return 
+	{AtomicContract(Root, KindExactness::DerivedFrom, 0, Object, 1)}
+    ;
   }
 };
 
 class DetectABIEnforcer {
 public:
   static constexpr auto Name = "Detect ABI Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return { InputOutputContract(Root, KindExactness::DerivedFrom, 0) };
+  std::array<AtomicContract, 1> getContract() const {
+    return  {AtomicContract(Root, KindExactness::DerivedFrom, 0) };
   }
 
   void registerPassess(llvm::legacy::PassManager &Manager) {
@@ -96,8 +94,8 @@ public:
 class IsolateEnforcer {
 public:
   static constexpr auto Name = "Isolate Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return { InputOutputContract(CFepper, KindExactness::Exact, 0, Isolated) };
+  std::array<AtomicContract, 1> getContract() const {
+    return  {AtomicContract(CFepper, KindExactness::Exact, 0, Isolated) };
   }
 
   void registerPassess(llvm::legacy::PassManager &Manager) {
@@ -108,10 +106,10 @@ public:
 class EnforceABIEnforcer {
 public:
   static constexpr auto Name = "EnforceABI Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return {
-      InputOutputContract(Isolated, KindExactness::Exact, 0, ABIEnforced)
-    };
+  std::array<AtomicContract, 1> getContract() const {
+    return 
+	{AtomicContract(Isolated, KindExactness::Exact, 0, ABIEnforced)}
+    ;
   }
 
   void registerPassess(llvm::legacy::PassManager &Manager) {
@@ -122,9 +120,9 @@ public:
 class InvokeIsolatedEnforcer {
 public:
   static constexpr auto Name = "InvokeIsolated Enforcer";
-  std::array<InputOutputContract, 2> getContract() const {
-    return { InputOutputContract(Root, KindExactness::Exact, 0, RootIsolated),
-             InputOutputContract(Isolated, KindExactness::DerivedFrom, 0) };
+  std::array<AtomicContract, 1> getContract() const {
+    return AtomicContract({ InputOutputContract(Root, KindExactness::Exact, 0, RootIsolated),
+             InputOutputContract(Isolated, KindExactness::DerivedFrom, 0) });
   }
 
   void registerPassess(llvm::legacy::PassManager &Manager) {

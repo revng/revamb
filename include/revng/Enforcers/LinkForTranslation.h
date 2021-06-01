@@ -8,22 +8,34 @@
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/BackingContainers.h"
 #include "revng/AutoEnforcer/InputOutputContract.h"
-#include "revng/Enforcers/RevngEnforcers.h"
 #include "revng/AutoEnforcer/LLVMEnforcer.h"
+#include "revng/Enforcers/RevngEnforcers.h"
 
 namespace AutoEnforcer {
 
 class LinkForTranslationEnforcer {
 public:
-
   static constexpr auto Name = "Link for Translation Enforcer";
 
-  std::array<InputOutputContract, 3> getContract() const {
-    return {
-      InputOutputContract(Root, KindExactness::DerivedFrom, 0, Translated, 3, true),
-      InputOutputContract(Binary, KindExactness::Exact, 1, Translated, 3, true),
-      InputOutputContract(Object, KindExactness::Exact, 2, Translated, 3, true)
-    };
+  std::array<AtomicContract, 1> getContract() const {
+    return { AtomicContract({ InputOutputContract(Root,
+                                                  KindExactness::DerivedFrom,
+                                                  0,
+                                                  Translated,
+                                                  3,
+                                                  true),
+                              InputOutputContract(Binary,
+                                                  KindExactness::Exact,
+                                                  1,
+                                                  Translated,
+                                                  3,
+                                                  true),
+                              InputOutputContract(Object,
+                                                  KindExactness::Exact,
+                                                  2,
+                                                  Translated,
+                                                  3,
+                                                  true) }) };
   }
 
   void run(DefaultLLVMContainer &M,
@@ -32,4 +44,4 @@ public:
            BinaryContainer &OutputBinary);
 };
 
-}
+} // namespace AutoEnforcer

@@ -28,8 +28,8 @@
 #include "revng/Enforcers/BinaryContainer.h"
 #include "revng/Enforcers/CompileModule.h"
 #include "revng/Enforcers/Lift.h"
-#include "revng/Enforcers/LinkSupport.h"
 #include "revng/Enforcers/LinkForTranslation.h"
+#include "revng/Enforcers/LinkSupport.h"
 #include "revng/Enforcers/RevngEnforcers.h"
 #include "revng/Support/CommandLine.h"
 #include "revng/Support/Debug.h"
@@ -81,7 +81,8 @@ int main(int argc, const char *argv[]) {
   // Establish goals
   BackingContainersStatus Targets;
   Targets.add(Lifted,
-              AutoEnforcerTarget({ AutoEnforcerQuantifier("root") }, Translated));
+              AutoEnforcerTarget({ AutoEnforcerQuantifier("root") },
+                                 Translated));
 
   // Run the pipeline
   auto Error = AE.run(Targets);

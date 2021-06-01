@@ -22,6 +22,7 @@ Error Pipeline::getObjectives(const BackingContainersStatus &Targets,
       break;
 
     PartialGoals = CurrentStep.satisfiableGoals(Targets, ToLoad);
+    PartialGoals.dump();
     ToExec.emplace_back(CurrentStep, PartialGoals);
   }
 

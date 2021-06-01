@@ -4,6 +4,7 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <cstring>
 #include <initializer_list>
 #include <iterator>
 #include <optional>
@@ -73,6 +74,16 @@ public:
   }
 
   void dump() const debug_function { dump(dbg); }
+
+  bool operator<=>(const AutoEnforcerQuantifier &Other) const {
+    if (not Name.has_value() and not Other.Name.has_value())
+      return 0;
+    if (not Name.has_value())
+      return -1;
+    if (not Other.Name.has_value())
+      return 1;
+    return strcmp(Name->c_str(), Other.Name->c_str());
+  }
 
 private:
   std::optional<std::string> Name;
@@ -154,6 +165,12 @@ public:
   }
 
   void dump() const debug_function { dump(dbg); }
+
+  int operator<=>(const AutoEnforcerTarget &Other) const;
+
+  bool operator==(const AutoEnforcerTarget &Other) const {
+    return (*this <=> Other) == 0;
+  }
 
 private:
   llvm::SmallVector<AutoEnforcerQuantifier, 3> Entries;
@@ -257,6 +274,8 @@ public:
   void dump() const debug_function { dump(dbg); }
 
   void merge(const BackingContainersStatus &Other);
+
+  void removeDupplicates();
 
 private:
   Container ContainersStatus;

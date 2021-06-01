@@ -8,6 +8,7 @@
 #include <memory>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
@@ -148,7 +149,7 @@ class LLVMEnforcerBaseImpl {
 public:
   virtual ~LLVMEnforcerBaseImpl() = default;
   virtual void registerPassess(llvm::legacy::PassManager &Manager) = 0;
-  virtual llvm::ArrayRef<InputOutputContract> getContract() const = 0;
+  virtual const std::vector<AtomicContract> &getContract() const = 0;
   virtual std::unique_ptr<LLVMEnforcerBaseImpl> clone() const = 0;
   virtual llvm::StringRef getName() const = 0;
 };
@@ -163,7 +164,7 @@ public:
     EnforcerPass.registerPassess(Manager);
   }
 
-  llvm::ArrayRef<InputOutputContract> getContract() const override {
+  const std::vector<AtomicContract> &getContract() const override {
     return Contract;
   }
 
@@ -171,16 +172,14 @@ public:
     return std::make_unique<LLVMEnforcerImpl>(*this);
   }
 
-  LLVMEnforcerImpl(LLVMEnforcerPass Pass) : EnforcerPass(std::move(Pass)) {
-    for (const auto &C : EnforcerPass.getContract())
-      Contract.push_back(C);
-  }
+  LLVMEnforcerImpl(LLVMEnforcerPass Pass) :
+    EnforcerPass(std::move(Pass)), Contract(this->EnforcerPass.getContract()) {}
 
   llvm::StringRef getName() const override { return LLVMEnforcerPass::Name; }
 
 private:
   LLVMEnforcerPass EnforcerPass;
-  llvm::SmallVector<InputOutputContract, 2> Contract;
+  std::vector<AtomicContract> Contract;
 };
 
 class LLVMEnforcer {
@@ -198,7 +197,7 @@ public:
   LLVMEnforcer(LLVMEnforcer &&Other) = default;
   ~LLVMEnforcer() = default;
 
-  llvm::SmallVector<InputOutputContract, 3> getContract() const;
+  std::vector<AtomicContract> getContract() const;
   void run(DefaultLLVMContainer &Container);
 
   template<typename OStream>
@@ -230,7 +229,7 @@ class PureLLVMEnforcer {
 public:
   static constexpr auto Name = "PureLLVMEnforcer";
 
-  llvm::SmallVector<InputOutputContract, 0> getContract() const { return {}; }
+  std::vector<AtomicContract> getContract() const { return {}; }
   void run(DefaultLLVMContainer &Container);
 
   template<typename OStream>

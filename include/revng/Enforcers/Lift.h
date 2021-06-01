@@ -21,10 +21,8 @@ namespace AutoEnforcer {
 class LiftEnforcer {
 public:
   static constexpr auto Name = "Lift Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return {
-      InputOutputContract(Binary, KindExactness::Exact, 0, Root, 1, true)
-    };
+  std::array<AtomicContract, 1> getContract() const {
+    return { AtomicContract(Binary, KindExactness::Exact, 0, Root, 1, true) };
   }
 
   void run(const BinaryContainer &SourceBinary,

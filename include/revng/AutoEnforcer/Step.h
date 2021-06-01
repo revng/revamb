@@ -87,16 +87,16 @@ public:
 
   BackingContainersStatus
   getRequirements(BackingContainersStatus &Target) const override {
-    const auto &Contract = Enf.getContract();
-    auto Range = llvm::make_range(Contract.rbegin(), Contract.rend());
-    for (const auto &Contract : Range)
+    const auto &Contracts = Enf.getContract();
+    for (const auto &Contract : llvm::reverse(Contracts))
       Contract.deduceRequirements(Target, RunningContainersNames);
     return Target;
   }
 
   BackingContainersStatus
   deduceResults(BackingContainersStatus &Target) const override {
-    for (const auto &Contract : Enf.getContract())
+    const auto &Contracts = Enf.getContract();
+    for (const auto &Contract : Contracts)
       Contract.deduceResults(Target, RunningContainersNames);
     return Target;
   }

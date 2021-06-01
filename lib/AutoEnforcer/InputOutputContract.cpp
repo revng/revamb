@@ -2,6 +2,9 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include "llvm/ADT/STLExtras.h"
+
+#include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/InputOutputContract.h"
 
 using namespace AutoEnforcer;
@@ -9,53 +12,74 @@ using namespace llvm;
 using namespace std;
 
 void InputOutputContract::deduceResults(BackingContainersStatus &StepStatus,
-                                        ArrayRef<string> ContainerNames) const {
-  auto &SourceContainerTargets = StepStatus
-    [ContainerNames[EnforcerArgumentSourceIndex]];
-  auto &OutputContainerTarget = StepStatus
-    [ContainerNames[EnforcerArgumentTargetIndex]];
+                                        ArrayRef<string> Names) const {
+  auto &OutputContainerTarget = StepStatus[Names[EnforcerArgumentTargetIndex]];
 
-  // We need a temporary storage for the targets because the source and output
-  // may be the same container and thus we would erase the just inserted targets
-  // as well.
-  BackingContainersStatus::TargetContainer Tmp;
+  TargetContainer Tmp;
+  deduceResults(StepStatus, Tmp, Names);
+
+  copy(Tmp, back_inserter(OutputContainerTarget));
+}
+
+void InputOutputContract::deduceResults(BackingContainersStatus &StepStatus,
+                                        BackingContainersStatus &Results,
+                                        ArrayRef<string> Names) const {
+  auto &OutputContainerTarget = Results[Names[EnforcerArgumentTargetIndex]];
+
+  deduceResults(StepStatus, OutputContainerTarget, Names);
+}
+
+void InputOutputContract::deduceResults(BackingContainersStatus &StepStatus,
+                                        TargetContainer &Results,
+                                        ArrayRef<string> Names) const {
+  auto &SourceContainerTargets = StepStatus[Names[EnforcerArgumentSourceIndex]];
 
   const auto Matches = [this](const AutoEnforcerTarget &Input) {
     return forwardMatches(Input);
   };
 
-  copy_if(SourceContainerTargets, back_inserter(Tmp), Matches);
+  copy_if(SourceContainerTargets, back_inserter(Results), Matches);
   if (not PreservedInput)
     erase_if(SourceContainerTargets, Matches);
 
-  for (AutoEnforcerTarget &Target : Tmp)
+  for (AutoEnforcerTarget &Target : Results)
     forward(Target);
-
-  copy(Tmp, back_inserter(OutputContainerTarget));
 }
 
 void InputOutputContract::deduceRequirements(BackingContainersStatus &Status,
                                              ArrayRef<string> Names) const {
 
   auto &SourceContainerTargets = Status[Names[EnforcerArgumentSourceIndex]];
-  auto &OutputContainerTarget = Status[Names[EnforcerArgumentTargetIndex]];
 
-  // We need a temporary storage for the targets because we source and output
-  // may be the same container and thus we would erase the just inserted targets
-  // as well.
-  BackingContainersStatus::TargetContainer Tmp;
+  TargetContainer Tmp;
+  deduceRequirements(Status, Tmp, Names);
+
+  copy(Tmp, back_inserter(SourceContainerTargets));
+}
+
+void InputOutputContract::deduceRequirements(BackingContainersStatus &Status,
+                                             BackingContainersStatus &Results,
+                                             ArrayRef<string> Names) const {
+
+  auto &SourceContainerTargets = Results[Names[EnforcerArgumentSourceIndex]];
+  deduceRequirements(Status, SourceContainerTargets, Names);
+}
+
+void InputOutputContract::deduceRequirements(BackingContainersStatus &Status,
+                                             TargetContainer &Results,
+                                             ArrayRef<string> Names) const {
+
+  auto &OutputContainerTarget = Status[Names[EnforcerArgumentTargetIndex]];
 
   const auto Matches = [this](const AutoEnforcerTarget &Input) {
     return backwardMatches(Input) or (PreservedInput and forwardMatches(Input));
   };
 
-  copy_if(OutputContainerTarget, back_inserter(Tmp), Matches);
+  copy_if(OutputContainerTarget, back_inserter(Results), Matches);
   erase_if(OutputContainerTarget, Matches);
 
-  for (AutoEnforcerTarget &Out : Tmp)
+  for (AutoEnforcerTarget &Out : Results)
     backward(Out);
-
-  copy(Tmp, back_inserter(SourceContainerTargets));
 }
 
 void InputOutputContract::forward(AutoEnforcerTarget &Input) const {
@@ -190,4 +214,89 @@ bool InputOutputContract::backwardMatches(const AutoEnforcerTarget &Out) const {
   case KindExactness::Exact:
     return Out.getKind().ancestorOf(*Source);
   }
+}
+
+using BCS = BackingContainersStatus;
+bool InputOutputContract::forwardMatches(const BCS &StepStatus,
+                                         ArrayRef<string> Names) const {
+  auto It = StepStatus.find(Names[EnforcerArgumentSourceIndex]);
+  if (It == StepStatus.end())
+    return false;
+  const auto &SourceContainerTargets = It->second;
+
+  const auto Matches = [this](const AutoEnforcerTarget &Input) {
+    return forwardMatches(Input);
+  };
+
+  return any_of(SourceContainerTargets, Matches);
+}
+
+bool InputOutputContract::backwardMatches(const BCS &StepStatus,
+                                          ArrayRef<string> Names) const {
+  auto It = StepStatus.find(Names[EnforcerArgumentTargetIndex]);
+  if (It == StepStatus.end())
+    return false;
+  const auto &OutputContainerTarget = It->second;
+
+  const auto Matches = [this](const AutoEnforcerTarget &Input) {
+    return backwardMatches(Input) or (PreservedInput and forwardMatches(Input));
+  };
+
+  return any_of(OutputContainerTarget, Matches);
+}
+
+void InputOutputContract::insertDefaultInput(BCS &Status,
+                                             ArrayRef<string> Names) const {
+  auto &SourceContainerTargets = Status[Names[EnforcerArgumentSourceIndex]];
+
+  llvm::SmallVector<AutoEnforcerQuantifier, 3>
+    Quantifiers(Source->Granularity->depth(), AutoEnforcerQuantifier());
+
+  AutoEnforcerTarget Target(move(Quantifiers), *Source, InputContract);
+  SourceContainerTargets.push_back(move(Target));
+}
+
+bool AtomicContract::forwardMatches(const BCS &Status,
+                                    llvm::ArrayRef<std::string> Names) const {
+  return all_of(Contract, [&Status, &Names](const auto &C) {
+    return C.forwardMatches(Status, Names);
+  });
+}
+
+bool AtomicContract::backwardMatches(const BCS &Status,
+                                     llvm::ArrayRef<std::string> Names) const {
+  return any_of(Contract, [&Status, &Names](const auto &C) {
+    return C.backwardMatches(Status, Names);
+  });
+}
+
+void AtomicContract::deduceRequirements(BackingContainersStatus &StepStatus,
+                                        ArrayRef<string> Names) const {
+  if (not backwardMatches(StepStatus, Names)) {
+    return;
+  }
+
+  BackingContainersStatus Results;
+  for (const auto &C : llvm::reverse(Contract)) {
+    if (C.backwardMatches(StepStatus, Names))
+      C.deduceRequirements(StepStatus, Results, Names);
+    else
+      C.insertDefaultInput(Results, Names);
+  }
+
+  StepStatus.merge(Results);
+  StepStatus.removeDupplicates();
+}
+
+void AtomicContract::deduceResults(BackingContainersStatus &StepStatus,
+                                   ArrayRef<string> Names) const {
+  if (not forwardMatches(StepStatus, Names))
+    return;
+
+  BackingContainersStatus Results;
+  for (const auto &C : Contract)
+    C.deduceResults(StepStatus, Results, Names);
+
+  StepStatus.merge(Results);
+  StepStatus.removeDupplicates();
 }

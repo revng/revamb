@@ -29,8 +29,8 @@ DefaultLLVMContainer::cloneFiltered(const TargetContainer &Targets) const {
   return make_unique<DefaultLLVMContainer>(move(Cloned));
 }
 
-SmallVector<InputOutputContract, 3> LLVMEnforcer::getContract() const {
-  SmallVector<InputOutputContract, 3> Contract;
+std::vector<AtomicContract> LLVMEnforcer::getContract() const {
+  std::vector<AtomicContract> Contract;
   for (const auto &Element : Passess)
     for (const auto &C : Element->getContract())
       Contract.push_back(C);

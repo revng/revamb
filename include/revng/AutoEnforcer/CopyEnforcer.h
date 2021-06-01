@@ -11,8 +11,8 @@ public:
   CopyEnforcer(Kind &K) : K(&K) {}
 
   static constexpr auto Name = "Copy Enforcer";
-  std::array<InputOutputContract, 1> getContract() const {
-    return { InputOutputContract(*K, KindExactness::Exact, 0, *K, 1) };
+  std::array<AtomicContract, 1> getContract() const {
+    return { AtomicContract(*K, KindExactness::Exact, 0, *K, 1) };
   }
 
   void run(const Source &S, Destination &T) { T = S; }

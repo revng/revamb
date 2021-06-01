@@ -37,6 +37,7 @@ bool init_unit_test();
 
 using namespace AutoEnforcer;
 using namespace std;
+using KE = KindExactness;
 
 static Granularity Root("Root");
 static Granularity Function("Function", Root);
@@ -141,10 +142,8 @@ class TestEnforcer {
 public:
   static constexpr auto Name = "TestEnforcer";
 
-  std::array<InputOutputContract, 1> getContract() const {
-    return {
-      InputOutputContract(RootKind, KindExactness::Exact, 0, RootKind2, 0)
-    };
+  std::vector<AtomicContract> getContract() const {
+    return { AtomicContract(RootKind, KE::Exact, 0, RootKind2, 0) };
   }
 
   void run(const MapContainer &Source, MapContainer &Target) {
@@ -169,110 +168,89 @@ BOOST_AUTO_TEST_CASE(InputOutputContractExactPassForward) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind);
 
-  InputOutputContract Contract1(RootKind, KindExactness::Exact);
+  AtomicContract Contract1(RootKind, KE::Exact);
   Contract1.deduceResults(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractExactExactForward) {
-  std::cout << "Here";
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind);
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::Exact,
-                                0,
-                                RootKind2,
-                                0);
+  AtomicContract Contract1(RootKind, KE::Exact, 0, RootKind2, 0);
   Contract1.deduceResults(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind2));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractDerivedPassForward) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind2);
 
-  InputOutputContract Contract1(RootKind, KindExactness::DerivedFrom);
+  AtomicContract Contract1(RootKind, KE::DerivedFrom);
   Contract1.deduceResults(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind2));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractDerivedExactForward) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind2);
 
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::DerivedFrom,
-                                0,
-                                RootKind,
-                                0);
+  AtomicContract Contract1(RootKind, KE::DerivedFrom, 0, RootKind, 0);
   Contract1.deduceResults(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractExactPassBackward) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind);
 
-  InputOutputContract Contract1(RootKind, KindExactness::Exact);
+  AtomicContract Contract1(RootKind, KE::Exact);
   Contract1.deduceRequirements(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractExactExactBackward) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind2);
 
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::Exact,
-                                0,
-                                RootKind2,
-                                0);
+  AtomicContract Contract1(RootKind, KE::Exact, 0, RootKind2, 0);
   Contract1.deduceRequirements(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractDerivedPassBackward) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind2);
 
-  InputOutputContract Contract1(RootKind, KindExactness::DerivedFrom);
+  AtomicContract Contract1(RootKind, KE::DerivedFrom);
   Contract1.deduceRequirements(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind2));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractDerivedExactBackward) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind2);
 
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::DerivedFrom,
-                                0,
-                                RootKind2,
-                                0);
+  AtomicContract Contract1(RootKind, KE::DerivedFrom, 0, RootKind2, 0);
   Contract1.deduceRequirements(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::DerivedFrom));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::DerivedFrom));
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractExactExactFineGrainedBackward) {
   BackingContainersStatus Targets;
   Targets.add(CName, { "root", "f1" }, FunctionKind);
 
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::Exact,
-                                0,
-                                FunctionKind,
-                                0);
+  AtomicContract Contract1(RootKind, KE::Exact, 0, FunctionKind, 0);
   Contract1.deduceRequirements(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
   BOOST_TEST((Targets[CName][0].getQuantifiers().size() == 1));
   BOOST_TEST((Targets[CName][0].getQuantifiers()[0].getName() == "root"));
 }
@@ -281,17 +259,20 @@ BOOST_AUTO_TEST_CASE(InputOutputContractExactExactFineGrainedForward) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("root", RootKind);
 
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::Exact,
-                                0,
-                                FunctionKind,
-                                0);
+  AtomicContract Contract1(RootKind, KE::Exact, 0, FunctionKind, 0);
   Contract1.deduceResults(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &FunctionKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
   BOOST_TEST((Targets[CName][0].getQuantifiers().size() == 2));
   BOOST_TEST((Targets[CName][0].getQuantifiers()[0].getName() == "root"));
   BOOST_TEST((Targets[CName][0].getQuantifiers()[1].isAll()));
+}
+
+static void checkIfContains(auto &TargetRange, const Kind &K, KE Exact) {
+  const auto ToFind = [&K, Exact](const AutoEnforcerTarget &Target) {
+    return &Target.getKind() == &K and Target.kindExactness() == Exact;
+  };
+  BOOST_TEST(find_if(TargetRange, ToFind) != TargetRange.end());
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractMupltipleInputTest) {
@@ -299,16 +280,12 @@ BOOST_AUTO_TEST_CASE(InputOutputContractMupltipleInputTest) {
   Targets[CName].emplace_back("name", RootKind2);
   Targets[CName].emplace_back("name2", RootKind);
 
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::DerivedFrom,
-                                0,
-                                RootKind2,
-                                0);
+  AtomicContract Contract1(RootKind, KE::DerivedFrom, 0, RootKind2, 0);
   Contract1.deduceRequirements(Targets, { CName });
-  BOOST_TEST((&Targets[CName][1].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][1].kindExactness() == KindExactness::DerivedFrom));
-  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+
+  const auto &ProducedResults = Targets[CName];
+  checkIfContains(ProducedResults, RootKind, KE::DerivedFrom);
+  checkIfContains(ProducedResults, RootKind, KE::Exact);
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractPreserved) {
@@ -316,51 +293,32 @@ BOOST_AUTO_TEST_CASE(InputOutputContractPreserved) {
   Targets[CName].emplace_back("name", RootKind2);
   Targets[CName].emplace_back("name2", RootKind);
 
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::DerivedFrom,
-                                0,
-                                RootKind2,
-                                0,
-                                true);
+  AtomicContract Contract1(RootKind, KE::DerivedFrom, 0, RootKind2, 0, true);
   Contract1.deduceResults(Targets, { CName });
-  BOOST_TEST((&Targets[CName][2].getKind() == &RootKind2));
-  BOOST_TEST((Targets[CName][2].kindExactness() == KindExactness::Exact));
-
-  BOOST_TEST((&Targets[CName][1].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][1].kindExactness() == KindExactness::Exact));
-
-  BOOST_TEST((&Targets[CName][0].getKind() == &RootKind2));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  const auto &ProducedResults = Targets[CName];
+  checkIfContains(ProducedResults, RootKind2, KE::Exact);
+  checkIfContains(ProducedResults, RootKind, KE::Exact);
+  checkIfContains(ProducedResults, RootKind2, KE::Exact);
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractPreservedBackwardMain) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind2);
 
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::DerivedFrom,
-                                0,
-                                RootKind2,
-                                0,
-                                true);
+  AtomicContract Contract1(RootKind, KE::DerivedFrom, 0, RootKind2, 0, true);
   Contract1.deduceRequirements(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::DerivedFrom));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::DerivedFrom));
 }
 
 BOOST_AUTO_TEST_CASE(InputOutputContractPreservedBackwardSecondary) {
   BackingContainersStatus Targets;
   Targets[CName].emplace_back("name", RootKind);
 
-  InputOutputContract Contract1(RootKind,
-                                KindExactness::DerivedFrom,
-                                0,
-                                RootKind2,
-                                0,
-                                true);
+  AtomicContract Contract1(RootKind, KE::DerivedFrom, 0, RootKind2, 0, true);
   Contract1.deduceRequirements(Targets, { CName });
   BOOST_TEST((&Targets[CName][0].getKind() == &RootKind));
-  BOOST_TEST((Targets[CName][0].kindExactness() == KindExactness::Exact));
+  BOOST_TEST((Targets[CName][0].kindExactness() == KE::Exact));
 }
 
 BOOST_AUTO_TEST_CASE(StepCanCloneAndRun) {
@@ -433,10 +391,8 @@ class FineGranerEnforcer {
 
 public:
   static constexpr auto Name = "FinedGranedEnforcer";
-  std::vector<InputOutputContract> getContract() const {
-    return {
-      InputOutputContract(RootKind, KindExactness::Exact, 0, FunctionKind, 1)
-    };
+  std::vector<AtomicContract> getContract() const {
+    return { AtomicContract(RootKind, KE::Exact, 0, FunctionKind, 1) };
   }
 
   void run(const MapContainer &Source, MapContainer &Target) {
@@ -532,10 +488,8 @@ static llvm::RegisterPass<IdentityPass> X2("IdentityPass", "IdentityPass");
 struct LLVMEnforcerPassFunctionCreator {
   static constexpr auto Name = "Function Creator";
 
-  std::array<InputOutputContract, 1> getContract() const {
-    return {
-      InputOutputContract(RootKind, KindExactness::Exact, 0, FunctionKind)
-    };
+  std::vector<AtomicContract> getContract() const {
+    return { AtomicContract(RootKind, KE::Exact, 0, FunctionKind) };
   }
 
   void registerPassess(llvm::legacy::PassManager &Manager) {
@@ -546,8 +500,8 @@ struct LLVMEnforcerPassFunctionCreator {
 struct LLVMEnforcerPassFunctionIdentity {
   static constexpr auto Name = "Identity";
 
-  std::array<InputOutputContract, 1> getContract() const {
-    return { InputOutputContract(FunctionKind, KindExactness::Exact) };
+  std::vector<AtomicContract> getContract() const {
+    return { AtomicContract(FunctionKind, KE::Exact) };
   }
 
   void registerPassess(llvm::legacy::PassManager &Manager) {
