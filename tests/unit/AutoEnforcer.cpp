@@ -24,6 +24,7 @@
 
 #include "revng/AutoEnforcer/AutoEnforcer.h"
 #include "revng/AutoEnforcer/AutoEnforcerErrors.h"
+#include "revng/AutoEnforcer/AutoEnforcerLibraryRegistry.h"
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/BackingContainerRegistry.h"
 #include "revng/AutoEnforcer/LLVMEnforcer.h"
@@ -413,7 +414,7 @@ public:
 };
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineBackwardFinedGrained) {
-  PipelineRunner AE;
+  PipelineRunner AE(AutoEnforcerLibraryRegistry::registerAllKinds());
   AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -434,7 +435,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineBackwardFinedGrained) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineFailure) {
-  PipelineRunner AE;
+  PipelineRunner AE(AutoEnforcerLibraryRegistry::registerAllKinds());
   AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -512,7 +513,7 @@ struct LLVMEnforcerPassFunctionIdentity {
 BOOST_AUTO_TEST_CASE(SingleElementLLVMPipelineBackwardFinedGrained) {
   llvm::LLVMContext C;
 
-  PipelineRunner AE;
+  PipelineRunner AE(AutoEnforcerLibraryRegistry::registerAllKinds());
   AE.registerContainerFactory<DefaultLLVMContainerFactory>(CName, C);
 
   AE.addStep("first_step",
@@ -542,7 +543,7 @@ BOOST_AUTO_TEST_CASE(SingleElementLLVMPipelineBackwardFinedGrained) {
 BOOST_AUTO_TEST_CASE(LLVMPureEnforcer) {
   llvm::LLVMContext C;
 
-  PipelineRunner AE;
+  PipelineRunner AE(AutoEnforcerLibraryRegistry::registerAllKinds());
   AE.registerContainerFactory<DefaultLLVMContainerFactory>(CName, C);
 
   auto MaybePureLLVMEnforcer = PureLLVMEnforcer::create({ "IdentityPass" });
@@ -572,7 +573,7 @@ BOOST_AUTO_TEST_CASE(LLVMPureEnforcer) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineForwardFinedGrained) {
-  PipelineRunner AE;
+  PipelineRunner AE(AutoEnforcerLibraryRegistry::registerAllKinds());
   AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -595,7 +596,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineForwardFinedGrained) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineInvalidation) {
-  PipelineRunner AE;
+  PipelineRunner AE(AutoEnforcerLibraryRegistry::registerAllKinds());
   AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -616,7 +617,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineInvalidation) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineWithRemove) {
-  PipelineRunner AE;
+  PipelineRunner AE(AutoEnforcerLibraryRegistry::registerAllKinds());
   AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -638,7 +639,7 @@ BOOST_AUTO_TEST_CASE(PipelineLoaderTest) {
   PipelineDeclaration PDeclaration{ { { CName, "MapContainer" } },
                                     { move(SDeclaration) } };
 
-  PipelineLoader Loader;
+  PipelineLoader Loader(AutoEnforcerLibraryRegistry::registerAllKinds());
   Loader.registerDefaultConstructibleContainer<MapContainer>("MapContainer");
   Loader.registerEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
 
@@ -675,7 +676,7 @@ static const std::string Pipeline(R"(---
                        )");
 
 BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYaml) {
-  PipelineLoader Loader;
+  PipelineLoader Loader(AutoEnforcerLibraryRegistry::registerAllKinds());
   Loader.registerDefaultConstructibleContainer<MapContainer>("MapContainer");
   Loader.registerEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
   auto MaybeAutoEnforcer = Loader.load(Pipeline);
@@ -684,7 +685,7 @@ BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYaml) {
 
 BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYamlLLVM) {
   llvm::LLVMContext C;
-  PipelineLoader Loader;
+  PipelineLoader Loader(AutoEnforcerLibraryRegistry::registerAllKinds());
   Loader.registerContainerFactory<DefaultLLVMContainerFactory>("LLVMContainer",
                                                                C);
   Loader.registerLLVMEnforcerPass<LLVMEnforcerPassFunctionCreator>("CreateFunct"
@@ -724,7 +725,7 @@ static std::string getCurrentPath() {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineStoreToDisk) {
-  PipelineRunner AE;
+  PipelineRunner AE(AutoEnforcerLibraryRegistry::registerAllKinds());
   AE.registerDefaultConstructibleFactory<MapContainer>(CName);
 
   AE.addStep("first_step", bindEnforcer<FineGranerEnforcer>(CName, CName));
@@ -744,7 +745,7 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineStoreToDisk) {
 }
 
 BOOST_AUTO_TEST_CASE(SingleElementPipelineStoreToDiskWithOverrides) {
-  PipelineLoader Loader;
+  PipelineLoader Loader(AutoEnforcerLibraryRegistry::registerAllKinds());
   Loader.registerDefaultConstructibleContainer<MapContainer>("MapContainer");
   Loader.registerEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
   auto MaybeAutoEnforcer = Loader.load(Pipeline);

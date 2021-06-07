@@ -73,6 +73,8 @@ public:
   llvm::Expected<PipelineRunner> load(const PipelineDeclaration &) const;
   llvm::Expected<PipelineRunner> load(llvm::StringRef Pipeline) const;
 
+  PipelineLoader(KindsRegisty KRegistry) : KindRegistry(std::move(KRegistry)) {}
+
   template<typename ContainerType>
   void registerDefaultConstructibleContainer(llvm::StringRef Name) {
     KnownContainerTypes.try_emplace(Name, []() {
@@ -166,6 +168,8 @@ private:
   std::set<std::string> EnabledFlags;
 
   llvm::StringMap<TypeSafePtrWrapper> Context;
+
+  KindsRegisty KindRegistry;
 };
 } // namespace AutoEnforcer
 

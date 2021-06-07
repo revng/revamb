@@ -87,7 +87,7 @@ public:
     Loader.registerContainerFactory<Type>("LLVMContainer", **MaybeLLVMContext);
   }
 
-  void registerKinds(llvm::StringMap<Kind *> &KindDictionary) override {}
+  void registerKinds(KindsRegisty &KindDictionary) override {}
 
   ~LLVMAutoEnforcerLibraryRegistry() override = default;
 };
@@ -99,7 +99,7 @@ static auto getBuffer(StringRef Path) {
 }
 
 static PipelineRunner setUpAutoEnforcer(LLVMContext &Context) {
-  PipelineLoader Loader;
+  PipelineLoader Loader(AutoEnforcerLibraryRegistry::registerAllKinds());
   Loader.add("LLVMContext", Context);
   Loader.registerEnabledFlags(EnablingFlags);
   AutoEnforcerLibraryRegistry::registerAllContainersAndEnforcers(Loader);
@@ -119,12 +119,12 @@ static PipelineRunner setUpAutoEnforcer(LLVMContext &Context) {
 }
 
 static void runAutoEnforcer(PipelineRunner &AutoEnforcer) {
-  StringMap<Kind *> KindDictionary;
-  AutoEnforcerLibraryRegistry::registerAllKinds(KindDictionary);
 
   BackingContainersStatus ToProduce;
   for (const auto &Target : Targets)
-    exitOnError(parseAutoEnforcerTarget(ToProduce, Target, KindDictionary));
+    exitOnError(parseAutoEnforcerTarget(ToProduce,
+                                        Target,
+                                        AutoEnforcer.getKindRegistry()));
 
   exitOnError(AutoEnforcer.run(ToProduce));
 }

@@ -5,21 +5,56 @@
 //
 
 #include <string>
+#include <utility>
 
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Error.h"
 
+#include "revng/ADT/Iterator.h"
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/BackingContainerRegistry.h"
 #include "revng/AutoEnforcer/Pipeline.h"
 #include "revng/Support/Debug.h"
 
 namespace AutoEnforcer {
+
+class KindsRegisty {
+public:
+  using Container = llvm::SmallVector<Kind *, 3>;
+
+  KindsRegisty(llvm::SmallVector<Kind *, 3> Kinds = {}) :
+    Kinds(std::move(Kinds)) {}
+  std::set<AutoEnforcerTarget> deduceInvalidations();
+  void registerKind(Kind &K) { Kinds.push_back(&K); }
+
+  auto begin() { return derefereceIterator(Kinds.begin()); }
+
+  auto end() { return derefereceIterator(Kinds.end()); }
+
+  auto begin() const { return derefereceIterator(Kinds.begin()); }
+
+  auto end() const { return derefereceIterator(Kinds.end()); }
+
+  template<typename OS>
+  void dump(OS &OStream) const {
+    for (const auto &K : *this)
+      OStream << K.getName().str() << "\n";
+  }
+
+  void dump() const debug_function { dump(dbg); }
+
+private:
+  Container Kinds;
+};
+
 class PipelineRunner {
 public:
   using iterator = std::vector<Step>::iterator;
   using const_iterator = std::vector<Step>::const_iterator;
   using InvalidationMap = llvm::StringMap<BackingContainersStatus>;
+
+  PipelineRunner(KindsRegisty KRegistry) : KindRegistry(std::move(KRegistry)) {}
 
   template<typename... EnforcerWrappers>
   void addStep(std::string StepName, EnforcerWrappers &&... EnfWrappers) {
@@ -125,10 +160,17 @@ public:
   llvm::Expected<BackingContainerBase *>
   safeGetContainer(llvm::StringRef StepName, llvm::StringRef ContainerName);
 
+  std::set<AutoEnforcerTarget> deduceInvalidations() {
+    return KindRegistry.deduceInvalidations();
+  }
+
+  const KindsRegisty &getKindRegistry() const { return KindRegistry; }
+
 private:
   BackingContainerRegistry Registry;
   bool CommittedRegistry = false;
   Pipeline Pipeline;
+  KindsRegisty KindRegistry;
 };
 
 class PipelineFileMapping {

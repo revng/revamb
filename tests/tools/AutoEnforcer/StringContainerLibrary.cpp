@@ -114,8 +114,8 @@ public:
                             CopyEnforcer<StringContainer>(Root));
   }
 
-  void registerKinds(llvm::StringMap<Kind *> &KindDictionary) override {
-    KindDictionary["Root"] = &Root;
+  void registerKinds(KindsRegisty &KindDictionary) override {
+    KindDictionary.registerKind(Root);
   }
 
   ~ExampleRegistryLibrary() override = default;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringMap.h"
 
 #include "revng/AutoEnforcer/PipelineLoader.h"
 
@@ -15,23 +16,24 @@ public:
       Reg->registerContainersAndEnforcers(Loader);
   }
 
-  static void registerAllKinds(llvm::StringMap<Kind *> &KindDictionary) {
+  static KindsRegisty registerAllKinds() {
+    KindsRegisty Registry;
     for (const auto &Reg : getInstances())
-      Reg->registerKinds(KindDictionary);
+      Reg->registerKinds(Registry);
 
-    for (auto &Kind : KindDictionary) {
-      Kind.second->getRootAncestor()->assign();
-      Kind.second->Granularity->getRootAncestor()->assign();
+    for (auto &Kind : Registry) {
+      Kind.getRootAncestor()->assign();
+      Kind.Granularity->getRootAncestor()->assign();
     }
+    return Registry;
   }
 
   virtual ~AutoEnforcerLibraryRegistry(){};
 
   virtual void registerContainersAndEnforcers(PipelineLoader &Loader) = 0;
-  virtual void registerKinds(llvm::StringMap<Kind *> &KindDictionary) = 0;
+  virtual void registerKinds(KindsRegisty &KindDictionary) = 0;
 
 private:
   static llvm::SmallVector<AutoEnforcerLibraryRegistry *, 3> &getInstances();
 };
-
 } // namespace AutoEnforcer

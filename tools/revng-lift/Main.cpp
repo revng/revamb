@@ -25,6 +25,7 @@
 #include "llvm/Support/raw_os_ostream.h"
 
 #include "revng/AutoEnforcer/AutoEnforcer.h"
+#include "revng/AutoEnforcer/AutoEnforcerLibraryRegistry.h"
 #include "revng/Enforcers/BinaryContainer.h"
 #include "revng/Enforcers/Lift.h"
 #include "revng/Enforcers/RevngEnforcers.h"
@@ -106,7 +107,7 @@ int main(int argc, const char *argv[]) {
   llvm::LLVMContext C;
 
   using namespace AutoEnforcer;
-  PipelineRunner AE;
+  PipelineRunner AE(AutoEnforcerLibraryRegistry::registerAllKinds());
   std::string Lifted = "lifted.ll";
   std::string Binary = "binary";
   AE.registerContainerFactory<DefaultLLVMContainerFactory>(Lifted, C);

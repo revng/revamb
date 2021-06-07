@@ -96,7 +96,7 @@ Error PipelineLoader::parseContainerDeclaration(PipelineRunner &AE,
 
 llvm::Expected<PipelineRunner>
 PipelineLoader::load(const PipelineDeclaration &Declaration) const {
-  PipelineRunner ToReturn;
+  PipelineRunner ToReturn(KindRegistry);
   for (const auto &Container : Declaration.Containers)
     if (auto error = parseContainerDeclaration(ToReturn, Container); !!error)
       return move(error);

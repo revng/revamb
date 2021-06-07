@@ -8,6 +8,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <optional>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -23,26 +24,6 @@
 #include "revng/Support/Debug.h"
 
 namespace AutoEnforcer {
-struct Granularity : public HierarchyNode<Granularity> {
-public:
-  Granularity(llvm::StringRef Name) : HierarchyNode(Name) {}
-  Granularity(llvm::StringRef Name, Granularity &Parent) :
-    HierarchyNode<Granularity>(Name, Parent) {}
-};
-
-struct Kind : public HierarchyNode<Kind> {
-public:
-  Kind(llvm::StringRef Name, Granularity *Granularity) :
-    HierarchyNode<Kind>(Name), Granularity(Granularity) {
-    revng_assert(Granularity != nullptr);
-  }
-  Kind(llvm::StringRef Name, Kind &Parent, Granularity *Granularity) :
-    HierarchyNode<Kind>(Name, Parent), Granularity(Granularity) {
-    revng_assert(Granularity != nullptr);
-  }
-
-  Granularity *Granularity;
-};
 
 enum class KindExactness { Exact, DerivedFrom };
 
@@ -89,9 +70,38 @@ private:
   std::optional<std::string> Name;
 };
 
+using GranularityList = llvm::SmallVector<AutoEnforcerQuantifier, 3>;
+
+struct Granularity : public HierarchyNode<Granularity> {
+public:
+  Granularity(llvm::StringRef Name) : HierarchyNode(Name) {}
+  Granularity(llvm::StringRef Name, Granularity &Parent) :
+    HierarchyNode<Granularity>(Name, Parent) {}
+};
+
+struct Kind : public HierarchyNode<Kind> {
+public:
+  Kind(llvm::StringRef Name, Granularity *Granularity) :
+    HierarchyNode<Kind>(Name), Granularity(Granularity) {
+    revng_assert(Granularity != nullptr);
+  }
+  Kind(llvm::StringRef Name, Kind &Parent, Granularity *Granularity) :
+    HierarchyNode<Kind>(Name, Parent), Granularity(Granularity) {
+    revng_assert(Granularity != nullptr);
+  }
+
+  virtual void deduceInvalidations(std::set<GranularityList> &Targets) const {
+    Targets.insert(GranularityList({ AutoEnforcerQuantifier("Root") }));
+  }
+
+  Granularity *Granularity;
+
+  virtual ~Kind() = default;
+};
+
 class AutoEnforcerTarget {
 public:
-  AutoEnforcerTarget(llvm::SmallVector<AutoEnforcerQuantifier, 3> Quantifiers,
+  AutoEnforcerTarget(GranularityList Quantifiers,
                      const Kind &K,
                      KindExactness Exactness = KindExactness::Exact) :
     Entries(std::move(Quantifiers)), K(&K), Exact(Exactness) {}
@@ -136,9 +146,7 @@ public:
   void setKind(const Kind &NewKind) { K = &NewKind; }
   void setKindExactness(KindExactness NewExactness) { Exact = NewExactness; }
 
-  const llvm::SmallVector<AutoEnforcerQuantifier, 3> &getQuantifiers() const {
-    return Entries;
-  }
+  const GranularityList &getQuantifiers() const { return Entries; }
 
   void addGranularity() { Entries.emplace_back(); }
   void dropGranularity() { Entries.pop_back(); }
@@ -173,7 +181,7 @@ public:
   }
 
 private:
-  llvm::SmallVector<AutoEnforcerQuantifier, 3> Entries;
+  GranularityList Entries;
   const Kind *K;
   KindExactness Exact;
 };
@@ -193,13 +201,16 @@ parseAutoEnforcerTarget(llvm::StringRef AsString, const KindDictionary &Dict) {
   llvm::SmallVector<llvm::StringRef, 3> Path;
   Parts[0].split(Path, '/');
 
-  auto It = Dict.find(Parts[1]);
+  Dict.dump();
+  auto It = llvm::find_if(Dict, [&Parts](Kind &K) {
+    return Parts[1] == K.getName();
+  });
   if (It == Dict.end())
     return llvm::createStringError(llvm::inconvertibleErrorCode(),
                                    "No known Kind %s in dictionary",
                                    Parts[0].str().c_str());
 
-  return AutoEnforcerTarget(std::move(Path), *It->second);
+  return AutoEnforcerTarget(std::move(Path), *It);
 }
 
 class BackingContainersStatus {
