@@ -19,90 +19,12 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "revng/ADT/Hierarchy.h"
-#include "revng/AutoEnforcer/InvalidationEvent.hpp"
+#include "revng/AutoEnforcer/AutoEnforcerQuantifier.h"
+#include "revng/AutoEnforcer/Kind.h"
 #include "revng/Support/Assert.h"
 #include "revng/Support/Debug.h"
 
 namespace AutoEnforcer {
-
-enum class KindExactness { Exact, DerivedFrom };
-
-class AutoEnforcerQuantifier {
-public:
-  AutoEnforcerQuantifier(std::optional<std::string> Name) :
-    Name(std::move(Name)) {}
-
-  AutoEnforcerQuantifier() : Name(std::nullopt) {}
-
-  bool isAll() const { return not Name.has_value(); }
-  bool isSingle() const { return Name.has_value(); }
-
-  const std::string &getName() const {
-    revng_assert(isSingle());
-    return *Name;
-  }
-
-  bool operator<(const AutoEnforcerQuantifier &Other) const {
-    return Name < Other.Name;
-  }
-
-  template<typename OStream>
-  void dump(OStream &OS) const debug_function {
-    if (Name.has_value())
-      OS << *Name;
-    else
-      OS << "*";
-  }
-
-  void dump() const debug_function { dump(dbg); }
-
-  bool operator<=>(const AutoEnforcerQuantifier &Other) const {
-    if (not Name.has_value() and not Other.Name.has_value())
-      return 0;
-    if (not Name.has_value())
-      return -1;
-    if (not Other.Name.has_value())
-      return 1;
-    return strcmp(Name->c_str(), Other.Name->c_str());
-  }
-
-private:
-  std::optional<std::string> Name;
-};
-
-using GranularityList = llvm::SmallVector<AutoEnforcerQuantifier, 3>;
-
-struct Granularity : public HierarchyNode<Granularity> {
-public:
-  Granularity(llvm::StringRef Name) : HierarchyNode(Name) {}
-  Granularity(llvm::StringRef Name, Granularity &Parent) :
-    HierarchyNode<Granularity>(Name, Parent) {}
-};
-
-struct Kind : public HierarchyNode<Kind> {
-public:
-  Kind(llvm::StringRef Name, Granularity *Granularity) :
-    HierarchyNode<Kind>(Name), Granularity(Granularity) {
-    revng_assert(Granularity != nullptr);
-  }
-  Kind(llvm::StringRef Name, Kind &Parent, Granularity *Granularity) :
-    HierarchyNode<Kind>(Name, Parent), Granularity(Granularity) {
-    revng_assert(Granularity != nullptr);
-  }
-
-  virtual void deduceInvalidations(const InvalidationEventBase &,
-                                   std::set<GranularityList> &Targets) const {
-    GranularityList List;
-    for (size_t i = 0; i < Granularity->depth(); i++)
-      List.push_back(AutoEnforcerQuantifier());
-    Targets.insert(std::move(List));
-  }
-
-  Granularity *Granularity;
-
-  virtual ~Kind() = default;
-};
 
 class AutoEnforcerTarget {
 public:
@@ -206,7 +128,6 @@ parseAutoEnforcerTarget(llvm::StringRef AsString, const KindDictionary &Dict) {
   llvm::SmallVector<llvm::StringRef, 3> Path;
   Parts[0].split(Path, '/');
 
-  Dict.dump();
   auto It = llvm::find_if(Dict, [&Parts](Kind &K) {
     return Parts[1] == K.getName();
   });
