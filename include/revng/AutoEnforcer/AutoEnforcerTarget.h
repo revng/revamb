@@ -20,6 +20,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "revng/ADT/Hierarchy.h"
+#include "revng/AutoEnforcer/InvalidationEvent.hpp"
 #include "revng/Support/Assert.h"
 #include "revng/Support/Debug.h"
 
@@ -90,8 +91,12 @@ public:
     revng_assert(Granularity != nullptr);
   }
 
-  virtual void deduceInvalidations(std::set<GranularityList> &Targets) const {
-    Targets.insert(GranularityList({ AutoEnforcerQuantifier("Root") }));
+  virtual void deduceInvalidations(const InvalidationEventBase &,
+                                   std::set<GranularityList> &Targets) const {
+    GranularityList List;
+    for (size_t i = 0; i < Granularity->depth(); i++)
+      List.push_back(AutoEnforcerQuantifier());
+    Targets.insert(std::move(List));
   }
 
   Granularity *Granularity;

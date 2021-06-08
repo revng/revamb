@@ -84,15 +84,17 @@ Error PipelineFileMapping::store(const PipelineRunner &LoadInto) const {
   return (**MaybeContainer).storeToDisk(InputFile);
 }
 
-set<AutoEnforcerTarget> KindsRegisty::deduceInvalidations() {
+set<AutoEnforcerTarget>
+KindsRegisty::deduceInvalidations(const InvalidationEventBase &Event) {
   set<AutoEnforcerTarget> ToReturn;
   for (const auto &Kind : Kinds) {
 
     set<GranularityList> Paths;
-    Kind->deduceInvalidations(Paths);
-    for (auto &Path : Paths)
-      ToReturn.insert(
-        AutoEnforcerTarget(Path, *Kind, KindExactness::DerivedFrom));
+    Kind->deduceInvalidations(Event, Paths);
+    for (auto &Path : Paths) {
+      AutoEnforcerTarget Target(Path, *Kind, KindExactness::DerivedFrom);
+      ToReturn.insert(std::move(Target));
+    }
   }
 
   return ToReturn;

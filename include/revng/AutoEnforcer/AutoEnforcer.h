@@ -14,6 +14,7 @@
 #include "revng/ADT/Iterator.h"
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/BackingContainerRegistry.h"
+#include "revng/AutoEnforcer/InvalidationEvent.hpp"
 #include "revng/AutoEnforcer/Pipeline.h"
 #include "revng/Support/Debug.h"
 
@@ -25,7 +26,8 @@ public:
 
   KindsRegisty(llvm::SmallVector<Kind *, 3> Kinds = {}) :
     Kinds(std::move(Kinds)) {}
-  std::set<AutoEnforcerTarget> deduceInvalidations();
+  std::set<AutoEnforcerTarget>
+  deduceInvalidations(const InvalidationEventBase &Event);
   void registerKind(Kind &K) { Kinds.push_back(&K); }
 
   auto begin() { return derefereceIterator(Kinds.begin()); }
@@ -148,6 +150,7 @@ public:
   getInvalidations(const AutoEnforcerTarget &Target) const;
 
   llvm::Error invalidate(const AutoEnforcerTarget &Target);
+  llvm::Error invalidate(const InvalidationEventBase &Event);
 
   llvm::Error store(llvm::StringRef DirPath) const {
     return Pipeline.store(DirPath);
@@ -160,8 +163,9 @@ public:
   llvm::Expected<BackingContainerBase *>
   safeGetContainer(llvm::StringRef StepName, llvm::StringRef ContainerName);
 
-  std::set<AutoEnforcerTarget> deduceInvalidations() {
-    return KindRegistry.deduceInvalidations();
+  std::set<AutoEnforcerTarget>
+  deduceInvalidations(const InvalidationEventBase &Event) {
+    return KindRegistry.deduceInvalidations(Event);
   }
 
   const KindsRegisty &getKindRegistry() const { return KindRegistry; }

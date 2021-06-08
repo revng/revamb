@@ -8,6 +8,7 @@ revng_add_library_internal(revngEnforcers SHARED
   Lift.cpp
   LinkSupport.cpp
   LinkForTranslation.cpp
+  ModelInvalidationEvent.cpp
   RevngEnforcers.cpp)
 
 llvm_map_components_to_libnames(LLVM_LIBRARIES MC)
