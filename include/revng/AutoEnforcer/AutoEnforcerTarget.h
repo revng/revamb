@@ -26,6 +26,8 @@
 
 namespace AutoEnforcer {
 
+enum class KindExactness { Exact, DerivedFrom };
+
 class AutoEnforcerTarget {
 public:
   AutoEnforcerTarget(GranularityList Quantifiers,

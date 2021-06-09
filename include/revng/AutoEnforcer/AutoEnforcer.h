@@ -11,44 +11,14 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Error.h"
 
-#include "revng/ADT/Iterator.h"
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
 #include "revng/AutoEnforcer/BackingContainerRegistry.h"
-#include "revng/AutoEnforcer/InvalidationEvent.hpp"
+#include "revng/AutoEnforcer/InvalidationEvent.h"
+#include "revng/AutoEnforcer/KindsRegistry.h"
 #include "revng/AutoEnforcer/Pipeline.h"
 #include "revng/Support/Debug.h"
 
 namespace AutoEnforcer {
-
-class KindsRegisty {
-public:
-  using Container = llvm::SmallVector<Kind *, 3>;
-
-  KindsRegisty(llvm::SmallVector<Kind *, 3> Kinds = {}) :
-    Kinds(std::move(Kinds)) {}
-  std::set<AutoEnforcerTarget>
-  deduceInvalidations(const InvalidationEventBase &Event);
-  void registerKind(Kind &K) { Kinds.push_back(&K); }
-
-  auto begin() { return derefereceIterator(Kinds.begin()); }
-
-  auto end() { return derefereceIterator(Kinds.end()); }
-
-  auto begin() const { return derefereceIterator(Kinds.begin()); }
-
-  auto end() const { return derefereceIterator(Kinds.end()); }
-
-  template<typename OS>
-  void dump(OS &OStream) const {
-    for (const auto &K : *this)
-      OStream << K.getName().str() << "\n";
-  }
-
-  void dump() const debug_function { dump(dbg); }
-
-private:
-  Container Kinds;
-};
 
 class PipelineRunner {
 public:

@@ -4,12 +4,12 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
-#include <string>
 #include <optional>
+#include <string>
 #include <utility>
 
-
 #include "llvm/ADT/SmallVector.h"
+
 #include "revng/Support/Assert.h"
 #include "revng/Support/Debug.h"
 
@@ -59,4 +59,4 @@ private:
 
 using GranularityList = llvm::SmallVector<AutoEnforcerQuantifier, 3>;
 
-}
+} // namespace AutoEnforcer

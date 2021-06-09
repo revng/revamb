@@ -6,13 +6,12 @@
 //
 #include <set>
 
-#include "revng/AutoEnforcer/AutoEnforcerQuantifier.h"
 #include "revng/ADT/Hierarchy.h"
+#include "revng/AutoEnforcer/AutoEnforcerQuantifier.h"
+#include "revng/AutoEnforcer/InvalidationEvent.h"
 #include "revng/Support/Assert.h"
-#include "revng/AutoEnforcer/InvalidationEvent.hpp"
 
 namespace AutoEnforcer {
-enum class KindExactness { Exact, DerivedFrom };
 
 struct Granularity : public HierarchyNode<Granularity> {
 public:
@@ -45,4 +44,4 @@ public:
   virtual ~Kind() = default;
 };
 
-}
+} // namespace AutoEnforcer

@@ -13,9 +13,12 @@ Expected<InvalidationMap>
 PipelineRunner::getInvalidations(const AutoEnforcerTarget &Target) const {
   llvm::StringMap<BackingContainersStatus> Invalidations;
   for (const auto &Step : Pipeline)
-    for (const auto &Container : Step.getBackingContainers())
-      if (Container.second->contains(Target))
+    for (const auto &Container : Step.getBackingContainers()) {
+
+      if (Container.second->contains(Target)) {
         Invalidations[Step.getName()].add(Container.first(), Target);
+      }
+    }
   if (auto Error = deduceInvalidations(Invalidations); Error)
     return move(Error);
 
@@ -98,4 +101,16 @@ KindsRegisty::deduceInvalidations(const InvalidationEventBase &Event) {
   }
 
   return ToReturn;
+}
+
+llvm::Error PipelineRunner::invalidate(const InvalidationEventBase &Event) {
+  auto Invalidations = deduceInvalidations(Event);
+
+  for (const auto &Invalidation : Invalidations) {
+    auto Error = invalidate(Invalidation);
+    if (Error)
+      return Error;
+  }
+
+  return Error::success();
 }

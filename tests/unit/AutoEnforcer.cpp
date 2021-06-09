@@ -65,7 +65,8 @@ public:
     if (Target.getQuantifiers().back().isAll())
       return map.count(AutoEnforcerTarget("f1", FunctionKind))
              and map.count(AutoEnforcerTarget("f2", FunctionKind));
-    return map.count(Target);
+    bool Contained = map.count(Target);
+    return Contained;
   }
 
   void mergeBackDerived(MapContainer &&Container) override {
@@ -588,7 +589,6 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineForwardFinedGrained) {
 
   auto Error = AE.deduceInvalidations(Invalidations);
   BOOST_TEST(!Error);
-  Invalidations["End"].dump();
   const auto &
     QuantifOfInvalidated = Invalidations["End"][CName].front().getQuantifiers();
   BOOST_TEST((QuantifOfInvalidated.back().isAll()));
@@ -714,8 +714,6 @@ BOOST_AUTO_TEST_CASE(PipelineLoaderTestFromYamlLLVM) {
   BOOST_TEST(!!MaybeAutoEnforcer);
   if (!MaybeAutoEnforcer)
     llvm::outs() << MaybeAutoEnforcer.takeError();
-
-  MaybeAutoEnforcer->dump();
 }
 
 static std::string getCurrentPath() {
@@ -763,6 +761,78 @@ BOOST_AUTO_TEST_CASE(SingleElementPipelineStoreToDiskWithOverrides) {
   BOOST_TEST((Container.get({ "Root", RootKind }) == 2));
   BOOST_TEST((!MaybeMapping->load(AE)));
   BOOST_TEST((Container.get({ "Root", RootKind }) == 1));
+}
+
+class InvalidationEventExample
+  : public InvalidationEvent<InvalidationEventExample> {
+public:
+  static char ID;
+};
+
+char InvalidationEventExample::ID;
+
+class InvalidatingKind : public Kind {
+public:
+  InvalidatingKind() : Kind("Invalidating Kind", &Root) {}
+  void deduceInvalidations(const InvalidationEventBase &Event,
+                           std::set<GranularityList> &Target) const override {
+    if (not llvm::isa<InvalidationEventExample>(Event))
+      return;
+
+    Target.insert({ AutoEnforcerQuantifier("f1") });
+  }
+};
+
+static InvalidatingKind InvalidatingK;
+
+BOOST_AUTO_TEST_CASE(InvalidationListFromEventTest) {
+  PipelineLoader Loader(KindsRegisty({ &InvalidatingK }));
+  Loader.registerDefaultConstructibleContainer<MapContainer>("MapContainer");
+  Loader.registerEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
+  auto MaybeAutoEnforcer = Loader.load(Pipeline);
+  BOOST_TEST(!!MaybeAutoEnforcer);
+  auto &AE = *MaybeAutoEnforcer;
+  auto MaybeMapping = PipelineFileMapping::parse("FirstStep:ContainerName:"
+                                                 "DontCareSourceFile");
+  BOOST_TEST(!!MaybeMapping);
+
+  auto &Container = AE.getStartingContainer<MapContainer>(CName);
+  AutoEnforcerTarget T("f1", InvalidatingK, KindExactness::DerivedFrom);
+  Container.get(T) = 1;
+  InvalidationEventExample Event;
+  auto Invalidations = AE.deduceInvalidations(Event);
+  BOOST_TEST(Invalidations.size() == 1);
+  for (const auto &I : Invalidations) {
+
+    BOOST_TEST(!AE.invalidate(I));
+  }
+
+  auto IsIn = AE.getStartingContainer<MapContainer>(CName).contains(T);
+  BOOST_TEST(IsIn == false);
+}
+
+BOOST_AUTO_TEST_CASE(InvalidationFromEventTest) {
+  PipelineLoader Loader(KindsRegisty({ &InvalidatingK }));
+  Loader.registerDefaultConstructibleContainer<MapContainer>("MapContainer");
+  Loader.registerEnforcer<FineGranerEnforcer>("FineGranerEnforcer");
+  auto MaybeAutoEnforcer = Loader.load(Pipeline);
+  BOOST_TEST(!!MaybeAutoEnforcer);
+  auto &AE = *MaybeAutoEnforcer;
+  auto MaybeMapping = PipelineFileMapping::parse("FirstStep:ContainerName:"
+                                                 "DontCareSourceFile");
+  BOOST_TEST(!!MaybeMapping);
+
+  auto &Container = AE.getStartingContainer<MapContainer>(CName);
+
+  AutoEnforcerTarget T("f1", InvalidatingK, KindExactness::DerivedFrom);
+  Container.get(T) = 1;
+  InvalidationEventExample Event;
+  auto Error = AE.invalidate(Event);
+
+  BOOST_TEST(!Error);
+
+  auto IsIn = AE.getStartingContainer<MapContainer>(CName).contains(T);
+  BOOST_TEST(IsIn == false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

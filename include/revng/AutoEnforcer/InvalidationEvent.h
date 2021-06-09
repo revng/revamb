@@ -17,8 +17,12 @@ private:
 };
 
 template<typename Derived>
-class InvalidationEvent : InvalidationEventBase {
+class InvalidationEvent : public InvalidationEventBase {
 public:
   InvalidationEvent() : InvalidationEventBase(Derived::ID) {}
+
+  static bool classof(const InvalidationEventBase *Instance) {
+    return Instance->isA<Derived>();
+  }
 };
 } // namespace AutoEnforcer

@@ -4,7 +4,7 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
-#include "revng/AutoEnforcer/InvalidationEvent.hpp"
+#include "revng/AutoEnforcer/InvalidationEvent.h"
 #include "revng/Model/Binary.h"
 #include "revng/Model/TupleTreeDiff.h"
 
