@@ -359,4 +359,16 @@ BOOST_AUTO_TEST_CASE(BasicMutableEdgeNodeTest) {
   revng_check(A.hasSuccessor(A) && A.hasPredecessor(A));
   A.removeSuccessor(A);
   revng_check(!(A.hasSuccessor(A) && A.hasPredecessor(A)));
+
+  A.addSuccessor(B, SomeEdge::PointType{ 1.0, 0.4 });
+  A.addSuccessor(A, SomeEdge::PointType{ 1.0, 0.5 });
+  B.addSuccessor(B, SomeEdge::PointType{ 1.0, 0.6 });
+
+  revng_check(A.successorCount() == 2);
+  revng_check(A.predecessorCount() == 2);
+  revng_check(B.successorCount() == 2);
+  revng_check(B.predecessorCount() == 2);
+  G.removeNode(&A);
+  revng_check(B.successorCount() == 1);
+  revng_check(B.predecessorCount() == 1);
 }
