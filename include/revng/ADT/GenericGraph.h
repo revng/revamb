@@ -261,6 +261,11 @@ private:
   NeighborContainer Successors;
 };
 
+template<typename T>
+concept IsForwardNode = requires {
+  T::is_forward_node;
+};
+
 namespace detail {
 
 /// To remove clutter from BidirectionalNode, the computation of some types are
@@ -388,6 +393,12 @@ private:
   NeighborContainer Predecessors;
 };
 
+template<typename T>
+concept IsBidirectionalNode = requires {
+  T::is_bidirectional_node;
+  typename llvm::Inverse<T *>;
+};
+
 /// Simple data structure to hold the EntryNode of a GenericGraph
 template<typename NodeT>
 class EntryNode {
@@ -457,17 +468,6 @@ public:
 
 private:
   NodesContainer Nodes;
-};
-
-template<typename T>
-concept IsForwardNode = requires {
-  T::is_forward_node;
-};
-
-template<typename T>
-concept IsBidirectionalNode = requires {
-  T::is_bidirectional_node;
-  typename llvm::Inverse<T *>;
 };
 
 template<typename T>
