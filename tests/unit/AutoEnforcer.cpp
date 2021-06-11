@@ -26,6 +26,7 @@
 #include "revng/AutoEnforcer/AutoEnforcerErrors.h"
 #include "revng/AutoEnforcer/AutoEnforcerLibraryRegistry.h"
 #include "revng/AutoEnforcer/AutoEnforcerTarget.h"
+#include "revng/AutoEnforcer/BackingContainerInspector.h"
 #include "revng/AutoEnforcer/BackingContainerRegistry.h"
 #include "revng/AutoEnforcer/LLVMEnforcer.h"
 #include "revng/AutoEnforcer/PipelineLoader.h"
@@ -833,6 +834,66 @@ BOOST_AUTO_TEST_CASE(InvalidationFromEventTest) {
 
   auto IsIn = AE.getStartingContainer<MapContainer>(CName).contains(T);
   BOOST_TEST(IsIn == false);
+}
+
+class InspectableContainerExample
+  : public InspectableBackingContainer<InspectableContainerExample> {
+public:
+  using TargertContainer = BackingContainersStatus::TargetContainer;
+  static char ID;
+
+  unique_ptr<BackingContainerBase>
+  cloneFiltered(const TargertContainer &Container) const final {
+    return make_unique<InspectableContainerExample>(*this);
+  }
+
+  void mergeBackDerived(InspectableContainerExample &&Container) override {}
+
+  ~InspectableContainerExample() override = default;
+
+  llvm::Error storeToDisk(llvm::StringRef Path) const override {
+    return llvm::Error::success();
+  }
+
+  llvm::Error loadFromDisk(llvm::StringRef Path) override {
+    return llvm::Error::success();
+  }
+
+  std::set<AutoEnforcerTarget> Targets;
+};
+
+char InspectableContainerExample::ID;
+
+class ExampleBackingContainerInpsector
+  : public BackingContainerInspector<InspectableContainerExample> {
+public:
+  ExampleBackingContainerInpsector() :
+    BackingContainerInspector<InspectableContainerExample>(RootKind) {}
+  bool contains(const AutoEnforcerTarget &Target,
+                const InspectableContainerExample &Container) const {
+    return Container.Targets.count(Target);
+  }
+
+  bool remove(const AutoEnforcerTarget &Target,
+              InspectableContainerExample &Container) const {
+
+    if (not contains(Target, Container))
+      return false;
+
+    Container.Targets.erase(Target);
+    return true;
+  }
+};
+
+static ExampleBackingContainerInpsector Example;
+
+BOOST_AUTO_TEST_CASE(InspectableContainersTest) {
+  InspectableContainerExample Example;
+  AutoEnforcerTarget T("f1", RootKind, KindExactness::DerivedFrom);
+  Example.Targets.insert(T);
+  BOOST_TEST(Example.contains(T));
+  BOOST_TEST(Example.remove(T));
+  BOOST_TEST(not Example.contains(T));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
