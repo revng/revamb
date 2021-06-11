@@ -302,3 +302,61 @@ BOOST_AUTO_TEST_CASE(TestSerializeGraph) {
 
   revng_check(Deserialized == Serializable);
 }
+
+// MutableEdgeNode tests
+struct SomeNode {
+  std::string Text;
+  SomeNode(std::string NewText) : Text(NewText) {}
+};
+struct SomeEdge {
+  struct PointType {
+    float X, Y;
+  };
+  template<typename... ArgTypes>
+  SomeEdge(ArgTypes... Args) : Points{ Args... } {}
+  std::vector<PointType> Points;
+};
+
+BOOST_AUTO_TEST_CASE(BasicMutableEdgeNodeTest) {
+  using Graph = GenericGraph<MutableEdgeNode<SomeNode, SomeEdge>>;
+
+  Graph G;
+  auto &A = *G.addNode("A");
+  auto &B = *G.addNode("B");
+
+  A.addSuccessor(A, SomeEdge::PointType{ 1.0, 0.1 });
+  A.addSuccessor(B, SomeEdge::PointType{ 1.0, 0.2 });
+  B.addSuccessor(A, SomeEdge::PointType{ 1.0, 0.3 });
+
+  revng_check(A.successorCount() == 2);
+  revng_check(A.predecessorCount() == 2);
+  revng_check(B.successorCount() == 1);
+  revng_check(B.predecessorCount() == 1);
+
+  for (auto *Node : G.nodes()) {
+    revng_check(!Node->Text.empty());
+    for (auto [Neighbor, Edge] : Node->successor_edges()) {
+      revng_check(!Neighbor.Text.empty());
+      for (auto &Point : Edge.Points)
+        revng_check(Point.X == 1.0 && Point.Y < 0.4 && Point.Y > 0.0);
+    }
+  }
+  for (auto *Node : G.nodes()) {
+    revng_check(!Node->Text.empty());
+    for (auto [Neighbor, Edge] : Node->predecessor_edges()) {
+      revng_check(!Neighbor.Text.empty());
+      for (auto &Point : Edge.Points)
+        revng_check(Point.X == 1.0 && Point.Y < 0.4 && Point.Y > 0.0);
+    }
+  }
+
+  revng_check(A.hasSuccessor(B) && B.hasPredecessor(A));
+  revng_check(B.hasSuccessor(A) && A.hasPredecessor(B));
+  A.removeSuccessor(B);
+  revng_check(!(A.hasSuccessor(B) && B.hasPredecessor(A)));
+  revng_check(B.hasSuccessor(A) && A.hasPredecessor(B));
+
+  revng_check(A.hasSuccessor(A) && A.hasPredecessor(A));
+  A.removeSuccessor(A);
+  revng_check(!(A.hasSuccessor(A) && A.hasPredecessor(A)));
+}

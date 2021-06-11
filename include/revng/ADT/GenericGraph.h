@@ -289,6 +289,7 @@ struct BidirectionalNodeBaseTCalc {
 } // namespace detail
 
 /// Same as ForwardNode, but with backward links too
+/// TODO: Make edge labels immutable
 template<typename Node,
          typename EdgeLabel = Empty,
          bool HasParent = true,
@@ -397,6 +398,258 @@ template<typename T>
 concept IsBidirectionalNode = requires {
   T::is_bidirectional_node;
   typename llvm::Inverse<T *>;
+};
+
+namespace detail {
+/// The parameters deciding specifics of the base type `MutableEdgeNode`
+/// extends are non-trivial. That's why those decisiion were wrapped
+/// inside this struct to minimize clutter.
+///
+/// \note At this step `TheNode` has not been declared yet, thus we accept a
+///       template parameter that has the same signature as `TheNode` that
+///       will be declared later. This allows us to use it as if it was
+///       declared, provided that only the real `TheNode` is used as this
+///       argument.
+template<typename Node,
+         typename EdgeLabel,
+         bool HasParent,
+         size_t SmallSize,
+         template<typename, typename, bool, size_t, typename, size_t, bool>
+         class TheNode,
+         typename FinalType,
+         size_t ParentSmallSize,
+         bool ParentHasEntryNode>
+struct MutableEdgeNodeBaseTCalc {
+  static constexpr bool
+    NoDerivation = std::is_same_v<FinalType, std::false_type>;
+  using NodeType = TheNode<Node,
+                           EdgeLabel,
+                           HasParent,
+                           SmallSize,
+                           FinalType,
+                           ParentSmallSize,
+                           ParentHasEntryNode>;
+  using DerivedType = std::conditional_t<NoDerivation, NodeType, FinalType>;
+  using GenericGraph = GenericGraph<DerivedType,
+                                    ParentSmallSize,
+                                    ParentHasEntryNode>;
+  using ParentType = Parent<GenericGraph, Node>;
+  using Result = std::conditional_t<HasParent, ParentType, Node>;
+};
+} // namespace detail
+
+/// A node type with support for non-trivial edge types.
+template<typename Node,
+         typename EdgeLabel = Empty,
+         bool HasParent = true,
+         size_t SmallSize = 2,
+         typename FinalType = std::false_type,
+         size_t ParentSmallSize = 16,
+         bool ParentHasEntryNode = true>
+class MutableEdgeNode
+  : public detail::MutableEdgeNodeBaseTCalc<Node,
+                                            EdgeLabel,
+                                            HasParent,
+                                            SmallSize,
+                                            MutableEdgeNode,
+                                            FinalType,
+                                            ParentSmallSize,
+                                            ParentHasEntryNode>::Result {
+public:
+  static constexpr bool is_mutable_edge_node = true;
+  static constexpr bool has_parent = HasParent;
+  using TypeCalc = detail::MutableEdgeNodeBaseTCalc<Node,
+                                                    EdgeLabel,
+                                                    HasParent,
+                                                    SmallSize,
+                                                    MutableEdgeNode,
+                                                    FinalType,
+                                                    ParentSmallSize,
+                                                    ParentHasEntryNode>;
+  using DerivedType = typename TypeCalc::DerivedType;
+  using Base = typename TypeCalc::Result;
+
+  struct EdgeView {
+    DerivedType &Neighbor;
+    EdgeLabel &Label;
+  };
+  struct OwningEdge {
+    DerivedType *Neighbor;
+    std::unique_ptr<EdgeLabel> Label;
+
+    operator EdgeView() {
+      revng_assert(Neighbor && Label);
+      return EdgeView{ *Neighbor, *Label };
+    }
+    operator EdgeView() const {
+      revng_assert(Neighbor && Label);
+      return EdgeView{ *Neighbor, *Label };
+    }
+  };
+  struct NonOwningEdge {
+    DerivedType *Neighbor;
+    EdgeLabel *Label;
+
+    operator EdgeView() {
+      revng_assert(Neighbor && Label);
+      return EdgeView{ *Neighbor, *Label };
+    }
+    operator EdgeView() const {
+      revng_assert(Neighbor && Label);
+      return EdgeView{ *Neighbor, *Label };
+    }
+  };
+
+  using EdgeOwnerContainer = llvm::SmallVector<OwningEdge, SmallSize>;
+  using EdgeViewContainer = llvm::SmallVector<NonOwningEdge, SmallSize>;
+
+public:
+  template<typename... Args>
+  explicit MutableEdgeNode(Args &&... args) :
+    Base(std::forward<Args>(args)...) {}
+
+  MutableEdgeNode(const MutableEdgeNode &) = default;
+  MutableEdgeNode(MutableEdgeNode &&) = default;
+  MutableEdgeNode &operator=(const MutableEdgeNode &) = default;
+  MutableEdgeNode &operator=(MutableEdgeNode &&) = default;
+
+public:
+  // This stuff is needed by the DominatorTree implementation
+  void printAsOperand(llvm::raw_ostream &, bool) const { revng_abort(); }
+
+public:
+  EdgeView addSuccessor(MutableEdgeNode &NewSuccessor, EdgeLabel EL = {}) {
+    OwningEdge Owner{ &NewSuccessor,
+                      std::make_unique<EdgeLabel>(std::move(EL)) };
+    NonOwningEdge View{ this, Owner.Label.get() };
+    auto &Output = Successors.emplace_back(std::move(Owner));
+    NewSuccessor.Predecessors.emplace_back(std::move(View));
+    return Output;
+  }
+  EdgeView addPredecessor(MutableEdgeNode &NewPredecessor, EdgeLabel EL = {}) {
+    OwningEdge Owner{ this, std::make_unique<EdgeLabel>(std::move(EL)) };
+    NonOwningEdge View{ &NewPredecessor, Owner.Label.get() };
+    auto &Output = NewPredecessor.Successors.emplace_back(std::move(Owner));
+    Predecessors.emplace_back(std::move(View));
+    return Output;
+  }
+
+public:
+  auto successor_edges() {
+    auto ToView = [](auto &E) -> EdgeView { return E; };
+    auto Range = llvm::make_range(Successors.begin(), Successors.end());
+    return llvm::map_range(Range, ToView);
+  }
+  auto successor_edges() const {
+    auto ToView = [](auto const &E) -> EdgeView const { return E; };
+    auto Range = llvm::make_range(Successors.begin(), Successors.end());
+    return llvm::map_range(Range, ToView);
+  }
+  auto predecessor_edges() {
+    auto ToView = [](auto &E) -> EdgeView { return E; };
+    auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
+    return llvm::map_range(Range, ToView);
+  }
+  auto predecessor_edges() const {
+    auto ToView = [](auto const &E) -> EdgeView const { return E; };
+    auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
+    return llvm::map_range(Range, ToView);
+  }
+
+  auto successors() {
+    auto ToNeighbor = [](auto &E) -> auto * { return E.Neighbor; };
+    auto Range = llvm::make_range(Successors.begin(), Successors.end());
+    return llvm::map_range(Range, ToNeighbor);
+  }
+  auto successors() const {
+    auto ToNeighbor = [](auto const &E) -> auto const * { return E.Neighbor; };
+    auto Range = llvm::make_range(Successors.begin(), Successors.end());
+    return llvm::map_range(Range, ToNeighbor);
+  }
+  auto predecessors() {
+    auto ToNeighbor = [](auto &E) -> auto * { return E.Neighbor; };
+    auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
+    return llvm::map_range(Range, ToNeighbor);
+  }
+  auto predecessors() const {
+    auto ToNeighbor = [](auto const &E) -> auto const * { return E.Neighbor; };
+    auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
+    return llvm::map_range(Range, ToNeighbor);
+  }
+
+protected:
+  typename EdgeOwnerContainer::iterator findSuccessor(DerivedType const &S) {
+    auto Comparator = [&S](auto &Edge) { return Edge.Neighbor == &S; };
+    return std::find_if(Successors.begin(), Successors.end(), Comparator);
+  }
+  typename EdgeOwnerContainer::const_iterator
+  findSuccessor(DerivedType const &S) const {
+    auto Comparator = [&S](auto const &Edge) { return Edge.Neighbor == &S; };
+    return std::find_if(Successors.begin(), Successors.end(), Comparator);
+  }
+  typename EdgeViewContainer::iterator findPredecessor(DerivedType const &P) {
+    auto Comparator = [&P](auto &Edge) { return Edge.Neighbor == &P; };
+    return std::find_if(Predecessors.begin(), Predecessors.end(), Comparator);
+  }
+  typename EdgeViewContainer::const_iterator
+  findPredecessor(DerivedType const &P) const {
+    auto Comparator = [&P](auto const &Edge) { return Edge.Neighbor == &P; };
+    return std::find_if(Predecessors.begin(), Predecessors.end(), Comparator);
+  }
+
+public:
+  bool hasSuccessor(DerivedType const &S) const {
+    return findSuccessor(S) != Successors.end();
+  }
+  bool hasPredecessor(DerivedType const &S) const {
+    return findPredecessor(S) != Predecessors.end();
+  }
+
+public:
+  size_t successorCount() const { return Successors.size(); }
+  size_t predecessorCount() const { return Predecessors.size(); }
+
+  bool hasSuccessors() const { return Successors.size() != 0; }
+  bool hasPredecessors() const { return Predecessors.size() != 0; }
+
+public:
+  // Maybe this overload should be `protected`. But it's faster than the
+  // alternative, so I'm hesitant.
+  typename EdgeOwnerContainer::iterator
+  removeSuccessor(typename EdgeOwnerContainer::const_iterator SuccessorIt) {
+    // Maybe we should do some checks as to whether `SuccessorIt` is valid.
+
+    auto *Successor = SuccessorIt->Neighbor;
+    auto PredecessorIt = Successor->findPredecessor(*this);
+    revng_assert(PredecessorIt != Successor->Predecessors.end(),
+                 "Half of an edge is missing, graph layout is broken.");
+    Successor->Predecessors.erase(PredecessorIt);
+    return Successors.erase(SuccessorIt);
+  }
+  auto removeSuccessor(DerivedType const &S) {
+    return removeSuccessor(findSuccessor(S));
+  }
+
+  // Maybe this overload should be `protected`. But it's faster than the
+  // alternative, so I'm hesitant.
+  typename EdgeViewContainer::iterator
+  removePredecessor(typename EdgeViewContainer::const_iterator PredecessorIt) {
+    // Maybe we should do some checks as to whether `PredecessorIt` is valid.
+
+    auto *Predecessor = PredecessorIt->Neighbor;
+    auto SuccessorIt = Predecessor->findSuccessor(*this);
+    revng_assert(SuccessorIt != Predecessor->Successors.end(),
+                 "Half of an edge is missing, graph layout is broken.");
+    Predecessor->Successors.erase(SuccessorIt);
+    return Predecessors.erase(PredecessorIt);
+  }
+  auto removePredecessor(DerivedType const &P) {
+    return removePredecessor(findPredecessor(P));
+  }
+
+private:
+  EdgeOwnerContainer Successors;
+  EdgeViewContainer Predecessors;
 };
 
 /// Simple data structure to hold the EntryNode of a GenericGraph
