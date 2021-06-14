@@ -228,6 +228,21 @@ public:
   }
 
   bool hasSuccessors() const { return Successors.size() != 0; }
+  size_t successorCount() const { return Successors.size(); }
+
+  DerivedType *&successorAt(size_t Index) {
+    return getNeighbor(Successors[Index]);
+  }
+  DerivedType *const &successorAt(size_t Index) const {
+    return getConstNeighbor(Successors[Index]);
+  }
+
+  Edge &successorEdgeAt(size_t Index) {
+    return Successors[Index];
+  }
+  Edge const &successorEdgeAt(size_t Index) const {
+    return Successors[Index];
+  }
 
 protected:
   static llvm::iterator_range<child_iterator>
@@ -353,6 +368,21 @@ public:
   }
 
   bool hasPredecessors() const { return Predecessors.size() != 0; }
+  size_t predecessorCount() const { return Predecessors.size(); }
+
+  typename Base::DerivedType *&predecessorAt(size_t Index) {
+    return getNeighbor(Predecessors[Index]);
+  }
+  typename Base::DerivedType *const &predecessorAt(size_t Index) const {
+    return getConstNeighbor(Predecessors[Index]);
+  }
+
+  typename Base::Edge &predecessorEdgeAt(size_t Index) {
+    return Predecessors[Index];
+  }
+  typename Base::Edge const &predecessorEdgeAt(size_t Index) const {
+    return Predecessors[Index];
+  }
 
 private:
   NeighborContainer Predecessors;
