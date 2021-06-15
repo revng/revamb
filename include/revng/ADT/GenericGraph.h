@@ -10,6 +10,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 
+#include "revng/ADT/STLExtras.h"
 #include "revng/Support/Debug.h"
 
 struct Empty {
@@ -577,126 +578,288 @@ public:
     return EdgeView(Output);
   }
 
+protected:
+  struct SuccessorFilters {
+    struct Types {
+      using ToView = EdgeView (*)(OwningEdge &);
+      using ToConstView = ConstEdgeView (*)(OwningEdge const &);
+      using ToNeighbor = DerivedType *&(*) (OwningEdge &);
+      using ToConstNeighbor =
+        DerivedType const *const &(*) (OwningEdge const &);
+    };
+
+    static constexpr typename Types::ToView ToView =
+      [](OwningEdge &E) -> EdgeView { return EdgeView(E); };
+    static constexpr typename Types::ToConstView ToConstView =
+      [](OwningEdge const &E) -> ConstEdgeView { return ConstEdgeView(E); };
+    static constexpr typename Types::ToNeighbor ToNeighbor =
+      [](OwningEdge &E) -> DerivedType *& { return E.Neighbor; };
+    static constexpr typename Types::ToConstNeighbor ToConstNeighbor =
+      [](OwningEdge const &E) -> DerivedType const *const & {
+      return E.Neighbor;
+    };
+  };
+
+  struct PredecessorFilters {
+    struct Types {
+      using ToView = EdgeView (*)(NonOwningEdge &);
+      using ToConstView = ConstEdgeView (*)(NonOwningEdge const &);
+      using ToNeighbor = DerivedType *&(*) (NonOwningEdge &);
+      using ToConstNeighbor =
+        DerivedType const *const &(*) (NonOwningEdge const &);
+    };
+
+    static constexpr typename Types::ToView ToView =
+      [](NonOwningEdge &E) -> EdgeView { return EdgeView(E); };
+    static constexpr typename Types::ToConstView ToConstView =
+      [](NonOwningEdge const &E) -> ConstEdgeView { return ConstEdgeView(E); };
+    static constexpr typename Types::ToNeighbor ToNeighbor =
+      [](NonOwningEdge &E) -> DerivedType *& { return E.Neighbor; };
+    static constexpr typename Types::ToConstNeighbor ToConstNeighbor =
+      [](NonOwningEdge const &E) -> DerivedType const *const & {
+      return E.Neighbor;
+    };
+  };
+
+  using SuccessorEdgeIterator = revng::
+    mapped_iterator<OwningEdge *, typename SuccessorFilters::Types::ToView>;
+  using ConstSuccessorEdgeIterator = revng::mapped_iterator<
+    OwningEdge *,
+    typename SuccessorFilters::Types::ToConstView>;
+  using SuccessorIterator = revng::
+    mapped_iterator<OwningEdge *, typename SuccessorFilters::Types::ToNeighbor>;
+  using ConstSuccessorIterator = revng::mapped_iterator<
+    OwningEdge *,
+    typename SuccessorFilters::Types::ToConstNeighbor>;
+
+  using PredecessorEdgeIterator = revng::mapped_iterator<
+    NonOwningEdge *,
+    typename PredecessorFilters::Types::ToView>;
+  using ConstPredecessorEdgeIterator = revng::mapped_iterator<
+    NonOwningEdge *,
+    typename PredecessorFilters::Types::ToConstView>;
+  using PredecessorIterator = revng::mapped_iterator<
+    NonOwningEdge *,
+    typename PredecessorFilters::Types::ToNeighbor>;
+  using ConstPredecessorIterator = revng::mapped_iterator<
+    NonOwningEdge *,
+    typename PredecessorFilters::Types::ToConstNeighbor>;
+
 public:
-  auto successor_edges() {
-    auto ToView = [](auto &E) { return EdgeView(E); };
+  llvm::iterator_range<SuccessorEdgeIterator> successor_edges() {
     auto Range = llvm::make_range(Successors.begin(), Successors.end());
-    return llvm::map_range(Range, ToView);
+    return revng::map_range(Range, SuccessorFilters::ToView);
   }
-  auto successor_edges() const {
-    auto ToView = [](auto const &E) { return ConstEdgeView(E); };
+  llvm::iterator_range<ConstSuccessorEdgeIterator> successor_edges() const {
     auto Range = llvm::make_range(Successors.begin(), Successors.end());
-    return llvm::map_range(Range, ToView);
+    return revng::map_range(Range, SuccessorFilters::ToConstView);
   }
-  auto predecessor_edges() {
-    auto ToView = [](auto &E) { return EdgeView(E); };
-    auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
-    return llvm::map_range(Range, ToView);
+  llvm::iterator_range<SuccessorIterator> successors() {
+    auto Range = llvm::make_range(Successors.begin(), Successors.end());
+    return revng::map_range(Range, SuccessorFilters::ToNeighbor);
   }
-  auto predecessor_edges() const {
-    auto ToView = [](auto const &E) { return ConstEdgeView(E); };
-    auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
-    return llvm::map_range(Range, ToView);
+  llvm::iterator_range<ConstSuccessorIterator> successors() const {
+    auto Range = llvm::make_range(Successors.begin(), Successors.end());
+    return revng::map_range(Range, SuccessorFilters::ToConstNeighbor);
   }
 
-  auto successors() {
-    auto ToNeighbor = [](auto &E) -> auto * { return E.Neighbor; };
-    auto Range = llvm::make_range(Successors.begin(), Successors.end());
-    return llvm::map_range(Range, ToNeighbor);
-  }
-  auto successors() const {
-    auto ToNeighbor = [](auto const &E) -> auto const * { return E.Neighbor; };
-    auto Range = llvm::make_range(Successors.begin(), Successors.end());
-    return llvm::map_range(Range, ToNeighbor);
-  }
-  auto predecessors() {
-    auto ToNeighbor = [](auto &E) -> auto * { return E.Neighbor; };
+  llvm::iterator_range<PredecessorEdgeIterator> predecessor_edges() {
     auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
-    return llvm::map_range(Range, ToNeighbor);
+    return revng::map_range(Range, PredecessorFilters::ToView);
   }
-  auto predecessors() const {
-    auto ToNeighbor = [](auto const &E) -> auto const * { return E.Neighbor; };
+  llvm::iterator_range<ConstPredecessorEdgeIterator> predecessor_edges() const {
     auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
-    return llvm::map_range(Range, ToNeighbor);
+    return revng::map_range(Range, PredecessorFilters::ToConstView);
+  }
+  llvm::iterator_range<PredecessorIterator> predecessors() {
+    auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
+    return revng::map_range(Range, PredecessorFilters::ToNeighbor);
+  }
+  llvm::iterator_range<ConstPredecessorIterator> predecessors() const {
+    auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
+    return revng::map_range(Range, PredecessorFilters::ToConstNeighbor);
   }
 
 protected:
-  using SuccessorIterator = typename EdgeOwnerContainer::iterator;
-  using ConstSuccessorIterator = typename EdgeOwnerContainer::const_iterator;
-  using PredecessorIterator = typename EdgeViewContainer::iterator;
-  using ConstPredecessorIterator = typename EdgeViewContainer::const_iterator;
-
-  SuccessorIterator findSuccessor(DerivedType const &S) {
+  auto findSuccessorImpl(DerivedType const &S) {
     auto Comparator = [&S](auto &Edge) { return Edge.Neighbor == &S; };
     return std::find_if(Successors.begin(), Successors.end(), Comparator);
   }
-  ConstSuccessorIterator findSuccessor(DerivedType const &S) const {
+  auto findSuccessorImpl(DerivedType const &S) const {
     auto Comparator = [&S](auto const &Edge) { return Edge.Neighbor == &S; };
     return std::find_if(Successors.begin(), Successors.end(), Comparator);
   }
-  PredecessorIterator findPredecessor(DerivedType const &P) {
+  auto findPredecessorImpl(DerivedType const &P) {
     auto Comparator = [&P](auto &Edge) { return Edge.Neighbor == &P; };
     return std::find_if(Predecessors.begin(), Predecessors.end(), Comparator);
   }
-  ConstPredecessorIterator findPredecessor(DerivedType const &P) const {
+  auto findPredecessorImpl(DerivedType const &P) const {
     auto Comparator = [&P](auto const &Edge) { return Edge.Neighbor == &P; };
     return std::find_if(Predecessors.begin(), Predecessors.end(), Comparator);
   }
 
 public:
+  SuccessorEdgeIterator findSuccessorEdge(DerivedType const &S) {
+    return SuccessorEdgeIterator(findSuccessorImpl(S),
+                                 SuccessorFilters::ToView);
+  }
+  ConstSuccessorEdgeIterator findSuccessorEdge(DerivedType const &S) const {
+    return ConstSuccessorEdgeIterator(findSuccessorImpl(S),
+                                      SuccessorFilters::ToConstView);
+  }
+  PredecessorEdgeIterator findPredecessorEdge(DerivedType const &S) {
+    return PredecessorEdgeIterator(findPredecessorImpl(S),
+                                   PredecessorFilters::ToView);
+  }
+  ConstPredecessorEdgeIterator findPredecessorEdge(DerivedType const &S) const {
+    return ConstPredecessorEdgeIterator(findPredecessorImpl(S),
+                                        PredecessorFilters::ToConstView);
+  }
+
+  SuccessorIterator findSuccessor(DerivedType const &S) {
+    return SuccessorIterator(findSuccessorImpl(S),
+                             SuccessorFilters::ToNeighbor);
+  }
+  ConstSuccessorIterator findSuccessor(DerivedType const &S) const {
+    return ConstSuccessorIterator(findSuccessorImpl(S),
+                                  SuccessorFilters::ToConstNeighbor);
+  }
+  PredecessorIterator findPredecessor(DerivedType const &S) {
+    return PredecessorIterator(findPredecessorImpl(S),
+                               PredecessorFilters::ToNeighbor);
+  }
+  ConstPredecessorIterator findPredecessor(DerivedType const &S) const {
+    return ConstPredecessorIterator(findPredecessorImpl(S),
+                                    PredecessorFilters::ToConstNeighbor);
+  }
+
+public:
   bool hasSuccessor(DerivedType const &S) const {
-    return findSuccessor(S) != Successors.end();
+    return findSuccessorImpl(S) != Successors.end();
   }
   bool hasPredecessor(DerivedType const &S) const {
-    return findPredecessor(S) != Predecessors.end();
+    return findPredecessorImpl(S) != Predecessors.end();
   }
 
 public:
   size_t successorCount() const { return Successors.size(); }
   size_t predecessorCount() const { return Predecessors.size(); }
+  size_t neighborCount() const {
+    return Successors.size() + Predecessors.size();
+  }
 
   bool hasSuccessors() const { return Successors.size() != 0; }
   bool hasPredecessors() const { return Predecessors.size() != 0; }
+  bool hasNeighbors() const { return hasSuccessors() || hasPredecessors(); }
 
-public:
-  // Maybe this overload should be `protected`. But it's faster than the
-  // alternative, so I'm hesitant.
-  SuccessorIterator removeSuccessor(ConstSuccessorIterator Iterator) {
-    // Maybe we should do some checks as to whether `Iterator` is valid.
+protected:
+  using OwnerIteratorImpl = typename EdgeOwnerContainer::const_iterator;
+  using ViewIteratorImpl = typename EdgeViewContainer::const_iterator;
 
+  auto removeSuccessorImpl(OwnerIteratorImpl InputIterator) {
+    auto Iterator = Successors.begin();
+    std::advance(Iterator,
+                 std::distance<OwnerIteratorImpl>(Iterator, InputIterator));
+
+    if (Successors.empty())
+      return Iterator;
+
+    // Maybe we should do some extra checks as to whether `Iterator` is valid.
     auto *Successor = Iterator->Neighbor;
-    auto PredecessorIt = Successor->findPredecessor(*this);
+    if (Successor->Predecessors.empty())
+      return Iterator;
+
+    auto PredecessorIt = Successor->findPredecessorImpl(*this);
     revng_assert(PredecessorIt != Successor->Predecessors.end(),
                  "Half of an edge is missing, graph layout is broken.");
-    Successor->Predecessors.erase(PredecessorIt);
-    return Successors.erase(Iterator);
-  }
-  auto removeSuccessor(DerivedType const &S) {
-    return removeSuccessor(findSuccessor(S));
-  }
+    std::swap(*PredecessorIt, Successor->Predecessors.back());
+    Successor->Predecessors.pop_back();
 
-  // Maybe this overload should be `protected`. But it's faster than the
-  // alternative, so I'm hesitant.
-  PredecessorIterator removePredecessor(ConstPredecessorIterator Iterator) {
-    // Maybe we should do some checks as to whether `Iterator` is valid.
+    std::swap(*Iterator, Successors.back());
+    Successors.pop_back();
+
+    return Iterator;
+  }
+  auto removePredecessorImpl(ViewIteratorImpl InputIterator) {
+    auto Iterator = Predecessors.begin();
+    std::advance(Iterator,
+                 std::distance<ViewIteratorImpl>(Iterator, InputIterator));
+
+    if (Predecessors.empty())
+      return Iterator;
 
     auto *Predecessor = Iterator->Neighbor;
-    auto SuccessorIt = Predecessor->findSuccessor(*this);
+    if (Predecessor->Successors.empty())
+      return Iterator;
+
+    // Maybe we should do some extra checks as to whether `Iterator` is valid.
+    auto SuccessorIt = Predecessor->findSuccessorImpl(*this);
     revng_assert(SuccessorIt != Predecessor->Successors.end(),
                  "Half of an edge is missing, graph layout is broken.");
-    Predecessor->Successors.erase(SuccessorIt);
-    return Predecessors.erase(Iterator);
+    std::swap(*SuccessorIt, Predecessor->Successors.back());
+    Predecessor->Successors.pop_back();
+
+    std::swap(*Iterator, Predecessors.back());
+    Predecessors.pop_back();
+
+    return Iterator;
   }
-  auto removePredecessor(DerivedType const &P) {
-    return removePredecessor(findPredecessor(P));
+
+public:
+  auto removeSuccessor(ConstSuccessorEdgeIterator Iterator) {
+    return SuccessorEdgeIterator(removeSuccessorImpl(Iterator.getCurrent()),
+                                 SuccessorFilters::ToView);
+  }
+  auto removeSuccessor(ConstSuccessorIterator Iterator) {
+    return SuccessorIterator(removeSuccessorImpl(Iterator.getCurrent()),
+                             SuccessorFilters::ToNeighbor);
+  }
+  auto removeSuccessor(DerivedType const &S) {
+    return SuccessorIterator(removeSuccessorImpl(findSuccessorImpl(S)),
+                             SuccessorFilters::ToNeighbor);
+  }
+
+  auto removePredecessor(ConstPredecessorEdgeIterator Iterator) {
+    return PredecessorEdgeIterator(removePredecessorImpl(Iterator.getCurrent()),
+                                   PredecessorFilters::ToView);
+  }
+  auto removePredecessor(ConstPredecessorIterator Iterator) {
+    return PredecessorIterator(removePredecessorImpl(Iterator.getCurrent()),
+                               PredecessorFilters::ToNeighbor);
+  }
+  auto removePredecessor(DerivedType const &S) {
+    return PredecessorIterator(removePredecessorImpl(findPredecessorImpl(S)),
+                               PredecessorFilters::ToNeighbor);
+  }
+
+public:
+  auto removeSuccessor(SuccessorEdgeIterator Iterator) {
+    return removeSuccessor(
+      ConstSuccessorEdgeIterator(Iterator.getCurrent(),
+                                 SuccessorFilters::ToConstView));
+  }
+  auto removeSuccessor(SuccessorIterator Iterator) {
+    return removeSuccessor(
+      ConstSuccessorIterator(Iterator.getCurrent(),
+                             SuccessorFilters::ToConstNeighbor));
+  }
+  auto removePredecessor(PredecessorEdgeIterator Iterator) {
+    return removePredecessor(
+      ConstPredecessorEdgeIterator(Iterator.getCurrent(),
+                                   PredecessorFilters::ToConstView));
+  }
+  auto removePredecessor(PredecessorIterator Iterator) {
+    return removePredecessor(
+      ConstPredecessorIterator(Iterator.getCurrent(),
+                               PredecessorFilters::ToConstNeighbor));
   }
 
 public:
   MutableEdgeNode &disconnect() {
     for (auto It = Successors.begin(); It != Successors.end();)
-      It = removeSuccessor(It);
+      It = removeSuccessorImpl(It);
     for (auto It = Predecessors.begin(); It != Predecessors.end();)
-      It = removePredecessor(It);
+      It = removePredecessorImpl(It);
     return *this;
   }
 

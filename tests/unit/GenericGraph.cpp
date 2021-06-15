@@ -434,3 +434,76 @@ BOOST_AUTO_TEST_CASE(MutableEdgeNodeFilterGraphTraitsTest) {
     revng_check(2 == std::distance(Begin, End));
   }
 }
+
+BOOST_AUTO_TEST_CASE(MutableEdgeNodeRemovalTest) {
+  GenericGraph<MutableEdgeNode<std::string, double>> Graph;
+  auto &A = *Graph.addNode("A");
+  auto &B = *Graph.addNode("B");
+  auto &C = *Graph.addNode("C");
+
+  revng_check(!A.hasSuccessor(B) && !B.hasPredecessor(A));
+  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
+  A.addSuccessor(B);
+  revng_check(A.hasSuccessor(B) && B.hasPredecessor(A));
+  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
+  A.removeSuccessor(B);
+  revng_check(!A.hasSuccessor(B) && !B.hasPredecessor(A));
+  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
+
+  A.addSuccessor(A);
+  A.addSuccessor(B);
+  A.addSuccessor(C);
+
+  revng_check(A.successorCount() == 3);
+  revng_check(A.predecessorCount() == 1);
+  revng_check(B.successorCount() == 0);
+  revng_check(B.predecessorCount() == 1);
+  revng_check(C.successorCount() == 0);
+  revng_check(C.predecessorCount() == 1);
+
+  size_t Counter = 0;
+  for (auto *From : Graph.nodes()) {
+    revng_check(!From->empty());
+    for (auto *To : From->successors()) {
+      revng_check(!To->empty());
+      if (*From == "A" && *To == "C")
+        ++Counter;
+    }
+  }
+  revng_check(Counter == 1);
+
+  for (auto Iterator = A.successors().begin();
+       Iterator != A.successors().end();) {
+    revng_check(!(*Iterator)->empty());
+    if (**Iterator != B)
+      Iterator = A.removeSuccessor(Iterator);
+    else
+      ++Iterator;
+  }
+
+  revng_check(A.successorCount() == 1);
+  revng_check(A.predecessorCount() == 0);
+  revng_check(B.successorCount() == 0);
+  revng_check(B.predecessorCount() == 1);
+  revng_check(C.successorCount() == 0);
+  revng_check(C.predecessorCount() == 0);
+
+  A.addSuccessor(A);
+  A.addSuccessor(C);
+
+  for (auto Iterator = A.successor_edges().begin();
+       Iterator != A.successor_edges().end();) {
+    revng_check(!Iterator->Neighbor.empty());
+    if (Iterator->Neighbor != C)
+      Iterator = A.removeSuccessor(Iterator);
+    else
+      ++Iterator;
+  }
+
+  revng_check(A.successorCount() == 1);
+  revng_check(A.predecessorCount() == 0);
+  revng_check(B.successorCount() == 0);
+  revng_check(B.predecessorCount() == 0);
+  revng_check(C.successorCount() == 0);
+  revng_check(C.predecessorCount() == 1);
+}
