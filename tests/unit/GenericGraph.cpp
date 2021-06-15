@@ -382,6 +382,21 @@ BOOST_AUTO_TEST_CASE(BasicMutableEdgeNodeTest) {
   revng_check(B.predecessorCount() == 1);
 }
 
+BOOST_AUTO_TEST_CASE(MutableEdgeNodeNoEdgeLabelsTest) {
+  GenericGraph<MutableEdgeNode<std::string>> Graph;
+  auto &A = *Graph.addNode("A");
+  auto &B = *Graph.addNode("B");
+
+  revng_check(!A.hasSuccessor(B) && !B.hasPredecessor(A));
+  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
+  A.addSuccessor(B);
+  revng_check(A.hasSuccessor(B) && B.hasPredecessor(A));
+  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
+  A.removeSuccessor(B);
+  revng_check(!A.hasSuccessor(B) && !B.hasPredecessor(A));
+  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
+}
+
 using TestMutableEdgeNode = MutableEdgeNode<TestNodeData, TestEdgeLabel>;
 
 BOOST_AUTO_TEST_CASE(MutableEdgeNodeFilterGraphTraitsTest) {

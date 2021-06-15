@@ -436,6 +436,60 @@ struct MutableEdgeNodeBaseTCalc {
   using ParentType = Parent<GenericGraph, Node>;
   using Result = std::conditional_t<HasParent, ParentType, Node>;
 };
+
+template<typename NodeType, typename LabelType>
+struct OwningEdge {
+  NodeType *Neighbor;
+  std::unique_ptr<LabelType> Label;
+};
+
+template<typename NodeType, typename LabelType>
+struct NonOwningEdge {
+  NodeType *Neighbor;
+  LabelType *Label;
+};
+
+template<typename NodeType, typename LabelType>
+struct EdgeView {
+  NodeType &Neighbor;
+  LabelType &Label;
+
+  explicit EdgeView(OwningEdge<NodeType, LabelType> &E) :
+    Neighbor(*E.Neighbor), Label(*E.Label) {}
+  explicit EdgeView(NonOwningEdge<NodeType, LabelType> &E) :
+    Neighbor(*E.Neighbor), Label(*E.Label) {}
+};
+
+template<typename NodeType, typename LabelType>
+struct ConstEdgeView {
+  NodeType const &Neighbor;
+  LabelType const &Label;
+
+  explicit ConstEdgeView(OwningEdge<NodeType, LabelType> const &E) :
+    Neighbor(*E.Neighbor), Label(*E.Label) {}
+  explicit ConstEdgeView(NonOwningEdge<NodeType, LabelType> const &E) :
+    Neighbor(*E.Neighbor), Label(*E.Label) {}
+};
+
+template<typename NodeType>
+struct Unlabeled {
+  NodeType *Neighbor;
+};
+
+template<typename NodeType>
+struct UnlabeledView {
+  NodeType &Neighbor;
+
+  explicit UnlabeledView(Unlabeled<NodeType> &E) : Neighbor(*E.Neighbor) {}
+};
+
+template<typename NodeType>
+struct ConstUnlabeledView {
+  NodeType const &Neighbor;
+
+  explicit ConstUnlabeledView(Unlabeled<NodeType> const &E) :
+    Neighbor(*E.Neighbor) {}
+};
 } // namespace detail
 
 /// A node type with support for non-trivial edge types.
@@ -469,37 +523,29 @@ public:
   using DerivedType = typename TypeCalc::DerivedType;
   using Base = typename TypeCalc::Result;
 
-  struct EdgeView {
-    DerivedType &Neighbor;
-    EdgeLabel &Label;
-  };
-  struct OwningEdge {
-    DerivedType *Neighbor;
-    std::unique_ptr<EdgeLabel> Label;
+  static constexpr bool AreEdgesLabeled = !std::is_same_v<EdgeLabel, Empty>;
 
-    operator EdgeView() {
-      revng_assert(Neighbor && Label);
-      return EdgeView{ *Neighbor, *Label };
-    }
-    operator EdgeView() const {
-      revng_assert(Neighbor && Label);
-      return EdgeView{ *Neighbor, *Label };
-    }
-  };
-  struct NonOwningEdge {
-    DerivedType *Neighbor;
-    EdgeLabel *Label;
+public:
+  using EdgeView = std::conditional_t<AreEdgesLabeled,
+                                      detail::EdgeView<DerivedType, EdgeLabel>,
+                                      detail::UnlabeledView<DerivedType>>;
+  using ConstEdgeView = std::conditional_t<
+    AreEdgesLabeled,
+    detail::ConstEdgeView<DerivedType, EdgeLabel>,
+    detail::ConstUnlabeledView<DerivedType>>;
 
-    operator EdgeView() {
-      revng_assert(Neighbor && Label);
-      return EdgeView{ *Neighbor, *Label };
-    }
-    operator EdgeView() const {
-      revng_assert(Neighbor && Label);
-      return EdgeView{ *Neighbor, *Label };
-    }
-  };
+protected:
+  using LabeledOwningEdge = detail::OwningEdge<DerivedType, EdgeLabel>;
+  using UnlabeledOwningEdge = detail::Unlabeled<DerivedType>;
+  using LabeledNonOwningEdge = detail::NonOwningEdge<DerivedType, EdgeLabel>;
+  using UnlabeledNonOwningEdge = detail::Unlabeled<DerivedType>;
 
+public:
+  using OwningEdge = std::
+    conditional_t<AreEdgesLabeled, LabeledOwningEdge, UnlabeledOwningEdge>;
+  using NonOwningEdge = std::conditional_t<AreEdgesLabeled,
+                                           LabeledNonOwningEdge,
+                                           UnlabeledNonOwningEdge>;
   using EdgeOwnerContainer = llvm::SmallVector<OwningEdge, SmallSize>;
   using EdgeViewContainer = llvm::SmallVector<NonOwningEdge, SmallSize>;
 
@@ -518,40 +564,37 @@ public:
   void printAsOperand(llvm::raw_ostream &, bool) const { revng_abort(); }
 
 public:
-  EdgeView addSuccessor(MutableEdgeNode &NewSuccessor, EdgeLabel EL = {}) {
-    OwningEdge Owner{ &NewSuccessor,
-                      std::make_unique<EdgeLabel>(std::move(EL)) };
-    NonOwningEdge View{ this, Owner.Label.get() };
+  auto addSuccessor(MutableEdgeNode &NewSuccessor, EdgeLabel EL = {}) {
+    auto [Owner, View] = constructEdge(*this, NewSuccessor, std::move(EL));
     auto &Output = Successors.emplace_back(std::move(Owner));
     NewSuccessor.Predecessors.emplace_back(std::move(View));
-    return Output;
+    return EdgeView(Output);
   }
-  EdgeView addPredecessor(MutableEdgeNode &NewPredecessor, EdgeLabel EL = {}) {
-    OwningEdge Owner{ this, std::make_unique<EdgeLabel>(std::move(EL)) };
-    NonOwningEdge View{ &NewPredecessor, Owner.Label.get() };
+  auto addPredecessor(MutableEdgeNode &NewPredecessor, EdgeLabel EL = {}) {
+    auto [Owner, View] = constructEdge(NewPredecessor, *this, std::move(EL));
     auto &Output = NewPredecessor.Successors.emplace_back(std::move(Owner));
     Predecessors.emplace_back(std::move(View));
-    return Output;
+    return EdgeView(Output);
   }
 
 public:
   auto successor_edges() {
-    auto ToView = [](auto &E) -> EdgeView { return E; };
+    auto ToView = [](auto &E) { return EdgeView(E); };
     auto Range = llvm::make_range(Successors.begin(), Successors.end());
     return llvm::map_range(Range, ToView);
   }
   auto successor_edges() const {
-    auto ToView = [](auto const &E) -> EdgeView const { return E; };
+    auto ToView = [](auto const &E) { return ConstEdgeView(E); };
     auto Range = llvm::make_range(Successors.begin(), Successors.end());
     return llvm::map_range(Range, ToView);
   }
   auto predecessor_edges() {
-    auto ToView = [](auto &E) -> EdgeView { return E; };
+    auto ToView = [](auto &E) { return EdgeView(E); };
     auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
     return llvm::map_range(Range, ToView);
   }
   auto predecessor_edges() const {
-    auto ToView = [](auto const &E) -> EdgeView const { return E; };
+    auto ToView = [](auto const &E) { return ConstEdgeView(E); };
     auto Range = llvm::make_range(Predecessors.begin(), Predecessors.end());
     return llvm::map_range(Range, ToView);
   }
@@ -654,6 +697,18 @@ public:
     for (auto It = Predecessors.begin(); It != Predecessors.end();)
       It = removePredecessor(It);
     return *this;
+  }
+
+protected:
+  std::tuple<OwningEdge, NonOwningEdge>
+  constructEdge(MutableEdgeNode &From, MutableEdgeNode &To, EdgeLabel &&EL) {
+    if constexpr (AreEdgesLabeled) {
+      LabeledOwningEdge O{ &To, std::make_unique<EdgeLabel>(std::move(EL)) };
+      LabeledNonOwningEdge V{ &From, O.Label.get() };
+      return { std::move(O), std::move(V) };
+    } else {
+      return { UnlabeledOwningEdge{ &To }, UnlabeledNonOwningEdge{ &From } };
+    }
   }
 
 private:
