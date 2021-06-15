@@ -148,31 +148,23 @@ struct KeyedObjectTraits<TestNodeData> {
   static TestNodeData fromKey(const unsigned &Key) { return { Key }; }
 };
 
-using TestNode = BidirectionalNode<TestNodeData, TestEdgeLabel>;
-using TestGraph = GenericGraph<TestNode>;
-
 SERIALIZABLEGRAPH_INTROSPECTION(TestNodeData, TestEdgeLabel);
 
-static bool
-shouldKeepNodePair(TestNode *const &Source, TestNode *const &Destination) {
-  return Source->Rank + Destination->Rank <= 2;
-}
-
-static bool shouldKeepEdge(Edge<TestNode, TestEdgeLabel> &Edge) {
-  return Edge.Weight > 5;
-}
-
+template<typename NodeType>
 struct DiamondGraph {
-  TestGraph Graph;
-  TestNode *Root;
-  TestNode *Then;
-  TestNode *Else;
-  TestNode *Final;
+  using Node = NodeType;
+
+  GenericGraph<Node> Graph;
+  Node *Root;
+  Node *Then;
+  Node *Else;
+  Node *Final;
 };
 
-static DiamondGraph createGraph() {
-  DiamondGraph DG;
-  TestGraph &Graph = DG.Graph;
+template<typename NodeType, bool UseRefs = false>
+static DiamondGraph<NodeType> createGraph() {
+  DiamondGraph<NodeType> DG;
+  auto &Graph = DG.Graph;
 
   // Create nodes
   DG.Root = Graph.addNode(0);
@@ -184,48 +176,58 @@ static DiamondGraph createGraph() {
   Graph.setEntryNode(DG.Root);
 
   // Create edges
-  DG.Root->addSuccessor(DG.Then, { 7 });
-  DG.Root->addSuccessor(DG.Else, { 1 });
+  if constexpr (UseRefs) {
+    DG.Root->addSuccessor(*DG.Then, { 7 });
+    DG.Root->addSuccessor(*DG.Else, { 1 });
 
-  DG.Then->addSuccessor(DG.Final, { 2 });
-  DG.Else->addSuccessor(DG.Final, { 3 });
+    DG.Then->addSuccessor(*DG.Final, { 2 });
+    DG.Else->addSuccessor(*DG.Final, { 3 });
+  } else {
+    DG.Root->addSuccessor(DG.Then, { 7 });
+    DG.Root->addSuccessor(DG.Else, { 1 });
+
+    DG.Then->addSuccessor(DG.Final, { 2 });
+    DG.Else->addSuccessor(DG.Final, { 3 });
+  }
 
   return DG;
 }
 
+using BidirectionalTestNode = BidirectionalNode<TestNodeData, TestEdgeLabel>;
+
 BOOST_AUTO_TEST_CASE(TestRPOT) {
-  DiamondGraph DG = createGraph();
-  ReversePostOrderTraversal<TestGraph *> RPOT(&DG.Graph);
-  std::vector<TestNode *> Visited;
-  for (TestNode *Node : RPOT)
+  auto DG = createGraph<BidirectionalTestNode>();
+  ReversePostOrderTraversal<decltype(decltype(DG)::Graph) *> RPOT(&DG.Graph);
+  std::vector<typename decltype(DG)::Node *> Visited;
+  for (auto *Node : RPOT)
     Visited.push_back(Node);
   revng_check(Visited.size() == 4);
 }
 
 BOOST_AUTO_TEST_CASE(TestDepthFirstVisit) {
-  DiamondGraph DG = createGraph();
-  std::vector<TestNode *> Visited;
-  for (TestNode *Node : depth_first(&DG.Graph))
+  auto DG = createGraph<BidirectionalTestNode>();
+  std::vector<typename decltype(DG)::Node *> Visited;
+  for (auto *Node : depth_first(&DG.Graph))
     Visited.push_back(Node);
   revng_check(Visited.size() == 4);
 
   Visited.clear();
-  for (TestNode *Node : inverse_depth_first(DG.Final))
+  for (auto *Node : inverse_depth_first(DG.Final))
     Visited.push_back(Node);
   revng_check(Visited.size() == 4);
 }
 
 BOOST_AUTO_TEST_CASE(TestDominatorTree) {
-  DiamondGraph DG = createGraph();
+  auto DG = createGraph<BidirectionalTestNode>();
 
-  DominatorTreeBase<TestNode, false> DT;
+  DominatorTreeBase<typename decltype(DG)::Node, false> DT;
   DT.recalculate(DG.Graph);
   revng_check(DT.dominates(DT.getNode(DG.Root), DT.getNode(DG.Then)));
   revng_check(DT.dominates(DT.getNode(DG.Root), DT.getNode(DG.Else)));
   revng_check(DT.dominates(DT.getNode(DG.Root), DT.getNode(DG.Final)));
   revng_check(not DT.dominates(DT.getNode(DG.Then), DT.getNode(DG.Final)));
 
-  DominatorTreeBase<TestNode, true> PDT;
+  DominatorTreeBase<typename decltype(DG)::Node, true> PDT;
   PDT.recalculate(DG.Graph);
   revng_check(PDT.dominates(PDT.getNode(DG.Final), PDT.getNode(DG.Then)));
   revng_check(PDT.dominates(PDT.getNode(DG.Final), PDT.getNode(DG.Else)));
@@ -234,10 +236,9 @@ BOOST_AUTO_TEST_CASE(TestDominatorTree) {
 }
 
 BOOST_AUTO_TEST_CASE(TestSCC) {
-  DiamondGraph DG = createGraph();
+  auto DG = createGraph<BidirectionalTestNode>();
   unsigned SCCCount = 0;
-  for (const std::vector<TestNode *> &SCC :
-       make_range(scc_begin(&DG.Graph), scc_end(&DG.Graph))) {
+  for (auto &SCC : make_range(scc_begin(&DG.Graph), scc_end(&DG.Graph))) {
     revng_check(SCC.size() == 1);
     ++SCCCount;
   }
@@ -245,48 +246,56 @@ BOOST_AUTO_TEST_CASE(TestSCC) {
 }
 
 BOOST_AUTO_TEST_CASE(TestFilterGraphTraits) {
-  DiamondGraph DG = createGraph();
-  TestNode *Root = DG.Root;
+  auto DG = createGraph<BidirectionalTestNode>();
 
   {
-    using Pair = NodePairFilteredGraph<TestNode *, shouldKeepNodePair>;
+    using Node = decltype(DG)::Node;
+    using TestType = bool (*)(Node *const &, Node *const &);
+    constexpr TestType TestLambda = [](auto *const &From, auto *const &To) {
+      return From->Rank + To->Rank <= 2;
+    };
+    using Pair = NodePairFilteredGraph<Node *, TestLambda>;
     using FGT = GraphTraits<Pair>;
-    using fdf_iterator = df_iterator<TestNode *,
-                                     df_iterator_default_set<TestNode *>,
+    using fdf_iterator = df_iterator<Node *,
+                                     df_iterator_default_set<Node *>,
                                      false,
                                      FGT>;
-    auto Begin = fdf_iterator::begin(Root);
-    auto End = fdf_iterator::end(Root);
+    auto Begin = fdf_iterator::begin(DG.Root);
+    auto End = fdf_iterator::end(DG.Root);
     revng_check(2 == std::distance(Begin, End));
   }
 
   {
-    using EFGT = GraphTraits<EdgeFilteredGraph<TestNode *, shouldKeepEdge>>;
-    using efdf_iterator = df_iterator<TestNode *,
-                                      df_iterator_default_set<TestNode *>,
+    using Node = decltype(DG)::Node;
+    using TestType = bool (*)(Edge<BidirectionalTestNode, TestEdgeLabel> &);
+    constexpr TestType TestLambda = [](auto &Edge) { return Edge.Weight > 5; };
+    using EFGT = GraphTraits<EdgeFilteredGraph<Node *, TestLambda>>;
+    using efdf_iterator = df_iterator<Node *,
+                                      df_iterator_default_set<Node *>,
                                       false,
                                       EFGT>;
-    auto Begin = efdf_iterator::begin(Root);
-    auto End = efdf_iterator::end(Root);
+    auto Begin = efdf_iterator::begin(DG.Root);
+    auto End = efdf_iterator::end(DG.Root);
     revng_check(2 == std::distance(Begin, End));
   }
 }
 
 BOOST_AUTO_TEST_CASE(TestWriteGraph) {
-  DiamondGraph DG = createGraph();
+  auto DG = createGraph<BidirectionalTestNode>();
   llvm::raw_null_ostream NullOutput;
   llvm::WriteGraph(NullOutput, &DG.Graph, "lol");
 }
 
 BOOST_AUTO_TEST_CASE(TestSerializableGraph) {
-  DiamondGraph DG = createGraph();
+  auto DG = createGraph<BidirectionalTestNode>();
   auto Serializable = toSerializable(DG.Graph);
-  auto Reserializable = toSerializable(Serializable.toGenericGraph<TestNode>());
+  using Node = decltype(DG)::Node;
+  auto Reserializable = toSerializable(Serializable.toGenericGraph<Node>());
   revng_check(Reserializable == Serializable);
 }
 
 BOOST_AUTO_TEST_CASE(TestSerializeGraph) {
-  DiamondGraph DG = createGraph();
+  auto DG = createGraph<BidirectionalTestNode>();
   auto Serializable = toSerializable(DG.Graph);
 
   std::string Buffer;
