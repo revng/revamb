@@ -621,21 +621,24 @@ public:
   }
 
 protected:
-  typename EdgeOwnerContainer::iterator findSuccessor(DerivedType const &S) {
+  using SuccessorIterator = typename EdgeOwnerContainer::iterator;
+  using ConstSuccessorIterator = typename EdgeOwnerContainer::const_iterator;
+  using PredecessorIterator = typename EdgeViewContainer::iterator;
+  using ConstPredecessorIterator = typename EdgeViewContainer::const_iterator;
+
+  SuccessorIterator findSuccessor(DerivedType const &S) {
     auto Comparator = [&S](auto &Edge) { return Edge.Neighbor == &S; };
     return std::find_if(Successors.begin(), Successors.end(), Comparator);
   }
-  typename EdgeOwnerContainer::const_iterator
-  findSuccessor(DerivedType const &S) const {
+  ConstSuccessorIterator findSuccessor(DerivedType const &S) const {
     auto Comparator = [&S](auto const &Edge) { return Edge.Neighbor == &S; };
     return std::find_if(Successors.begin(), Successors.end(), Comparator);
   }
-  typename EdgeViewContainer::iterator findPredecessor(DerivedType const &P) {
+  PredecessorIterator findPredecessor(DerivedType const &P) {
     auto Comparator = [&P](auto &Edge) { return Edge.Neighbor == &P; };
     return std::find_if(Predecessors.begin(), Predecessors.end(), Comparator);
   }
-  typename EdgeViewContainer::const_iterator
-  findPredecessor(DerivedType const &P) const {
+  ConstPredecessorIterator findPredecessor(DerivedType const &P) const {
     auto Comparator = [&P](auto const &Edge) { return Edge.Neighbor == &P; };
     return std::find_if(Predecessors.begin(), Predecessors.end(), Comparator);
   }
@@ -658,16 +661,15 @@ public:
 public:
   // Maybe this overload should be `protected`. But it's faster than the
   // alternative, so I'm hesitant.
-  typename EdgeOwnerContainer::iterator
-  removeSuccessor(typename EdgeOwnerContainer::const_iterator SuccessorIt) {
-    // Maybe we should do some checks as to whether `SuccessorIt` is valid.
+  SuccessorIterator removeSuccessor(ConstSuccessorIterator Iterator) {
+    // Maybe we should do some checks as to whether `Iterator` is valid.
 
-    auto *Successor = SuccessorIt->Neighbor;
+    auto *Successor = Iterator->Neighbor;
     auto PredecessorIt = Successor->findPredecessor(*this);
     revng_assert(PredecessorIt != Successor->Predecessors.end(),
                  "Half of an edge is missing, graph layout is broken.");
     Successor->Predecessors.erase(PredecessorIt);
-    return Successors.erase(SuccessorIt);
+    return Successors.erase(Iterator);
   }
   auto removeSuccessor(DerivedType const &S) {
     return removeSuccessor(findSuccessor(S));
@@ -675,16 +677,15 @@ public:
 
   // Maybe this overload should be `protected`. But it's faster than the
   // alternative, so I'm hesitant.
-  typename EdgeViewContainer::iterator
-  removePredecessor(typename EdgeViewContainer::const_iterator PredecessorIt) {
-    // Maybe we should do some checks as to whether `PredecessorIt` is valid.
+  PredecessorIterator removePredecessor(ConstPredecessorIterator Iterator) {
+    // Maybe we should do some checks as to whether `Iterator` is valid.
 
-    auto *Predecessor = PredecessorIt->Neighbor;
+    auto *Predecessor = Iterator->Neighbor;
     auto SuccessorIt = Predecessor->findSuccessor(*this);
     revng_assert(SuccessorIt != Predecessor->Successors.end(),
                  "Half of an edge is missing, graph layout is broken.");
     Predecessor->Successors.erase(SuccessorIt);
-    return Predecessors.erase(PredecessorIt);
+    return Predecessors.erase(Iterator);
   }
   auto removePredecessor(DerivedType const &P) {
     return removePredecessor(findPredecessor(P));
