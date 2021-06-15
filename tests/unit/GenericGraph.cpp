@@ -381,3 +381,41 @@ BOOST_AUTO_TEST_CASE(BasicMutableEdgeNodeTest) {
   revng_check(B.successorCount() == 1);
   revng_check(B.predecessorCount() == 1);
 }
+
+using TestMutableEdgeNode = MutableEdgeNode<TestNodeData, TestEdgeLabel>;
+
+BOOST_AUTO_TEST_CASE(MutableEdgeNodeFilterGraphTraitsTest) {
+  auto DG = createGraph<TestMutableEdgeNode, true>();
+
+  {
+    using Node = decltype(DG)::Node;
+    using TestType = bool (*)(Node *const &, Node *const &);
+    constexpr TestType TestLambda = [](auto *const &From, auto *const &To) {
+      return From->Rank + To->Rank <= 2;
+    };
+    using FGT = GraphTraits<NodePairFilteredGraph<Node *, TestLambda>>;
+    using fdf_iterator = df_iterator<Node *,
+                                     df_iterator_default_set<Node *>,
+                                     false,
+                                     FGT>;
+    auto Begin = fdf_iterator::begin(DG.Root);
+    auto End = fdf_iterator::end(DG.Root);
+    revng_check(2 == std::distance(Begin, End));
+  }
+
+  {
+    using Node = decltype(DG)::Node;
+    using TestType = bool (*)(typename Node::EdgeView const &);
+    constexpr TestType TestLambda = [](typename Node::EdgeView const &Edge) {
+      return Edge.Label.Weight > 5;
+    };
+    using EFGT = GraphTraits<EdgeFilteredGraph<Node *, TestLambda>>;
+    using efdf_iterator = df_iterator<Node *,
+                                      df_iterator_default_set<Node *>,
+                                      false,
+                                      EFGT>;
+    auto Begin = efdf_iterator::begin(DG.Root);
+    auto End = efdf_iterator::end(DG.Root);
+    revng_check(2 == std::distance(Begin, End));
+  }
+}

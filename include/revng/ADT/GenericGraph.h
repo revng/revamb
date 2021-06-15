@@ -811,6 +811,50 @@ public:
   static NodeRef getEntryNode(NodeRef N) { return N; };
 };
 
+/// Implement GraphTraits<MutableEdgeNode>
+template<IsMutableEdgeNode T>
+struct GraphTraits<T *> {
+public:
+  using NodeRef = T *;
+  using EdgeRef = typename T::EdgeView;
+
+  using ChildIteratorType = decltype(std::declval<T>().successors().begin());
+  using ChildEdgeIteratorType = decltype(
+    std::declval<T>().successor_edges().begin());
+
+public:
+  static auto child_begin(T *N) { return N->successors().begin(); }
+  static auto child_end(T *N) { return N->successors().end(); }
+
+  static auto child_edge_begin(T *N) { return N->successor_edges().begin(); }
+  static auto child_edge_end(T *N) { return N->successor_edges().end(); }
+
+  static T *edge_dest(EdgeRef Edge) { return &Edge.Neighbor; }
+  static T *getEntryNode(T *N) { return N; };
+};
+
+/// Implement GraphTraits<Inverse<MutableEdgeNode>>
+template<IsMutableEdgeNode T>
+struct GraphTraits<llvm::Inverse<T *>> {
+public:
+  using NodeRef = T *;
+  using EdgeRef = typename T::EdgeView;
+
+  using ChildIteratorType = decltype(std::declval<T>().predecessors().begin());
+  using ChildEdgeIteratorType = decltype(
+    std::declval<T>().predecessor_edges().begin());
+
+public:
+  static auto child_begin(T *N) { return N->predecessors().begin(); }
+  static auto child_end(T *N) { return N->predecessors().end(); }
+
+  static auto child_edge_begin(T *N) { return N->predecessor_edges().begin(); }
+  static auto child_edge_end(T *N) { return N->predecessor_edges().end(); }
+
+  static T *edge_dest(EdgeRef Edge) { return &Edge.Neighbor; }
+  static T *getEntryNode(llvm::Inverse<T *> N) { return N.Graph; };
+};
+
 /// Implement GraphTraits<GenericGraph>
 template<IsGenericGraph T>
 struct GraphTraits<T *> : public GraphTraits<typename T::Node *> {
