@@ -462,7 +462,7 @@ bool StackAnalysis::runOnModule(Module &M) {
     serialize(pathToStream(ABIAnalysisOutputPath, Output));
   }
 
-  commitToModel(GCBI, &F, GrandResult, LMP.getWriteableModel());
+  commitToModel(GCBI, &F, GrandResult, *LMP.getWriteableModel());
 
   return false;
 }

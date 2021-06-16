@@ -25,9 +25,9 @@ public:
 public:
   const model::Binary &getReadOnlyModel() const { return *TheBinary; }
 
-  model::Binary &getWriteableModel() {
+  TupleTree<model::Binary> &getWriteableModel() {
     HasChanged = true;
-    return *TheBinary;
+    return TheBinary;
   }
 
   bool hasChanged() const { return HasChanged; }

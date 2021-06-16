@@ -88,7 +88,7 @@ bool Binary::verify() const {
     }
   }
 
-  return true;
+  return model::verifyTypeSystem(Types);
 }
 
 static FunctionCFG getGraph(const Function &F) {

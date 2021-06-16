@@ -309,3 +309,21 @@ target_compile_definitions(test_recursive_coroutines_fallback PRIVATE DISABLE_RE
 
 add_recursive_coroutine_test(test_recursive_coroutines_iterative)
 target_compile_definitions(test_recursive_coroutines_iterative PRIVATE ITERATIVE)
+
+#
+# tests for flat c
+#
+
+revng_add_private_executable(test_flatc "${SRC}/FlatC.cpp")
+target_compile_definitions(test_flatc
+  PRIVATE "BOOST_TEST_DYN_LINK=1")
+target_include_directories(test_flatc
+  PRIVATE "${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_flatc
+  revngSupport
+  revngUnitTestHelpers
+  revngModel
+  Boost::unit_test_framework
+  ${LLVM_LIBRARIES})
+add_test(NAME test_flatc COMMAND ./bin/test_flatc)
+set_tests_properties(test_flatc PROPERTIES LABELS "unit")

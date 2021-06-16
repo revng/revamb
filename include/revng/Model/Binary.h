@@ -12,6 +12,7 @@
 #include "revng/ADT/UpcastablePointer.h"
 #include "revng/ADT/UpcastablePointer/YAMLTraits.h"
 #include "revng/Model/TupleTree.h"
+#include "revng/Model/Type.h"
 #include "revng/Support/MetaAddress.h"
 #include "revng/Support/MetaAddress/YAMLTraits.h"
 #include "revng/Support/YAMLTraits.h"
@@ -912,11 +913,19 @@ static_assert(IsKeyedObjectContainer<MutableSet<model::Function>>);
 class model::Binary {
 public:
   MutableSet<model::Function> Functions;
+  SortedVector<UpcastablePointer<model::Type>> Types;
+
+public:
+  model::TypePath makeTypePath(const model::Type *T) {
+    model::TypePath Result = model::makeTypePath(T);
+    Result.Root = this;
+    return Result;
+  }
 
 public:
   bool verify() const debug_function;
 };
-INTROSPECTION_NS(model, Binary, Functions)
+INTROSPECTION_NS(model, Binary, Functions, Types)
 
 template<>
 struct llvm::yaml::MappingTraits<model::Binary>
