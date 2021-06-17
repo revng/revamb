@@ -27,7 +27,7 @@ program compiled for x86-64:
       return a + myfunction();
     }
 
-The program has been compiled as follows:
+The program has been compiled as follows (note that for this step we are using the x86_64 compiler toolchain provided with orchestra, you can type ``orc install toolchain/x86-64/gcc`` to install it):
 
 .. code-block:: sh
 
@@ -55,7 +55,7 @@ And it has been translated as follows:
 
 .. code-block:: sh
 
-   revng lift --no-link --debug-info ll example example.ll
+   revng lift --debug-info ll example example.ll
 
 Global variables
 ================
@@ -112,7 +112,7 @@ In our example we have single segment, readable and executable:
 
    @.o_rx_0x400000 = constant [344 x i8] c"\7FELF\02\01\01\0...", section ".o_rx_0x400000", align 1
 
-As you can see it is initalized with a copy of the original segment and its
+As you can see it is initialized with a copy of the original segment and it's
 assigned to the ``.o_rx_0x400000`` section.
 
 Other global variables
@@ -138,7 +138,7 @@ example program we have three program headers of 56 bytes, loaded at
 
     @.elfheaderhelper = constant i8 0, section ".elfheaderhelper", align 1
     @e_phentsize = constant i64 56
-    @e_phnum = constant i64 3
+    @e_phnum = constant i64 7
     @phdr_address = constant i64 4194368
 
 
@@ -146,7 +146,7 @@ Input architecture description
 ==============================
 
 The generated module also contains a *named metadata node*:
-``revng.input.architecture``. Currently it's composed by a metadata tuple with
+``revng.input.architecture``. Currently, it's composed of a metadata tuple with
 two values:
 
 :``string ArchitectureName``: the name of the input architecture.
@@ -166,7 +166,7 @@ Here's how this information appears in our example:
 
 .. code-block:: llvm
 
-    !revng.input.architecture = !{!0}
+    !revng.input.architecture = !{!1}
     !1 = !{!"x86_64", i32 1, i32 0, !"pc", !"rsp", !2}
     !2 = !{!"rax", !"rbx", !"rcx", !"rdx", !"rbp", ... }
 
@@ -178,7 +178,7 @@ The ``root`` function
 =====================
 
 This section describes how the function collecting all the translated code is
-organized. This fuction is known as the ``root`` function:
+organized. This function is known as the ``root`` function:
 
 .. code-block:: llvm
 
@@ -221,11 +221,11 @@ program to the first basic block containing the code generated due to A.
                        translated, execution is diverted to
                        ``dispatcher.external``.
 :``dispatcher.external``: the value of the program counter doesn't match any of
-                          the translated ones. This basic blocks checks whether
+                          the translated ones. This basic block checks whether
                           the value falls within an executable segment of the
                           input program (using the ``is_executable`` function
                           from ``support.c``. If it is, then rev.ng was not able
-                          to propertly identify this basic block and we jump to
+                          to properly identify this basic block and we jump to
                           ``dispatcher.default``. Otherwise, the program counter
                           might be actually invalid or it could belong to a
                           function in a dynamic library. In this case, we simply
@@ -236,7 +236,7 @@ program to the first basic block containing the code generated due to A.
 :``anypc``: handles the situation in which we were not able to fully enumerate
             all the possible jump targets of an indirect jump. Typically will
             just jump to ``dispatcher.entry``.
-:``unexpectedpc``: handles the situation in which we though we were able to
+:``unexpectedpc``: handles the situation in which we thought we were able to
                    enumerate all the possible jump targets, but an unexpected
                    program counter was requested. This indicates the presence of
                    a bug. It can either try to proceed with execution going to
@@ -245,7 +245,7 @@ program to the first basic block containing the code generated due to A.
 The very first basic block is ``entrypoint``. Its main purpose is to create all
 the required local variables (``alloca`` instructions) and ensure that all the
 basic blocks are reachable. In fact, it is terminated by a ``switch``
-instruction which make all the previously mentioned basic blocks reachable. This
+instruction which makes all the previously mentioned basic blocks reachable. This
 ensures that we can compute a proper dominator tree and no basic blocks are
 collected as dead code.
 
@@ -333,8 +333,8 @@ Each instruction we generate is associated with three types of metadata:
 :oi: *original instruction* metadata, contains a pair of elements. The former
      element is a reference to a string global variable containing the
      disassembled input instruction that generated the current instruction. The
-     latter element is an integer representing is the program counter associated
-     to that instruction.
+     latter element is an integer representing the program counter associated
+     with that instruction.
 :pi: *portable tiny code instruction* metadata, contains a string representing
      the textual representation of the TCG instruction that generated the
      current instruction.
@@ -378,7 +378,7 @@ The ``!dbg`` metadata points to a ``DILocation`` object, which tells us that
 we're at line 244 within the ``root`` function. This information will allow the
 debugger (e.g., ``gdb``) to perform step-by-step debugging. ``!oi`` points to a
 metadata node containing a reference to ``@disasm_myfcuntion``, a global
-variable containing the diassembled instruction that lead to generate this
+variable containing the disassembled instruction that lead to generate this
 instruction and its address (``4194536``). Finally, ``!pi`` points to the TCG
 instruction leading to the creation of this instruction.
 
@@ -439,13 +439,13 @@ Function calls
 --------------
 
 rev.ng can detect function calls. The terminator of a basic block can be
-considered a function call if it's preceeded by a call to a function called
-``function_call``. This function take three parameters:
+considered a function call if it's preceded by a call to a function called
+``function_call``. This function takes three parameters:
 
 :BlockAddress Callee: reference to the callee basic block. The target of the
    function call, most likely a function.
 :BlockAddress Return: reference to the return basic block. It's the basic block
-                      associated to the return address.
+                      associated with the return address.
 :u64 ReturnPC: the return address.
 :GlobalVariable LinkRegister: reference to the CSV representing the link
                               register for this specific function call. If null,
@@ -486,7 +486,7 @@ rev.ng can identify function boundaries and function arguments:
 
 .. code-block:: sh
 
-   revng opt -S example.ll -detect-function-boundaries -detect-abi -o example.functions.ll
+   revng opt -S example.ll -detect-abi -o example.functions.ll
 
 This information is encoded in the generated module by associating two types of
 metadata (``revng.func.entry`` and ``revng.func.member.of``) to the terminator
@@ -563,7 +563,7 @@ Helper functions
 
 Certain features of the input CPU would be too big to be expanded in TCG
 instructions by QEMU (and therefore translate them in LLVM IR). For this reason,
-call to *helper functions* are emitted. An example of an helper function is the
+calls to *helper functions* are emitted. An example of a helper function is the
 function handling a syscall or a floating point division. These functions can
 take arguments and can read and modify freely all the CSV.
 
@@ -600,14 +600,14 @@ function isolation pass using the appropriate pass:
 
 .. code-block:: sh
 
-    revng opt -S example.ll -isolate -invoke-isolated-functions -o example.isolated.ll
+    revng opt -S example.ll -detect-abi -isolate -invoke-isolated-functions -o example.isolated.ll
 
 As you can see by comparing the original IR and the one to which the function
 isolation pass has been applied the main difference is that, on the basis of the
 information recovered by the function boundaries analysis applied by revng, now
 the code is organized in different LLVM functions.
 
-As a reference we can see that the basic block ``bb.myfunction`` that belonged
+As a reference, we can see that the basic block ``bb.myfunction`` that belonged
 to the ``root`` function after the isolation is in the LLVM function
 ``bb.myfunction``.
 
@@ -626,7 +626,7 @@ function.
 Just after the function call we also add a branch to the identified return
 address.
 
-As a reference take the call to ``my_function``. In the original IR it appeared in
+As a reference, take the call to ``my_function``. In the original IR it appeared in
 this form:
 
 .. code-block:: llvm
@@ -644,7 +644,7 @@ Now with the actual call appears like this:
 Always on the basis of the information recovered by the analysis performed by
 rev.ng we are able to emit ``ret`` instructions where needed.
 
-As a reference at the end of the basic block ``bb.myfunction`` the branch to the
+As a reference, at the end of the basic block ``bb.myfunction`` the branch to the
 dispatcher:
 
 .. code-block:: llvm
@@ -657,15 +657,15 @@ has been substituted by the ``ret`` instruction:
 
     ret void
 
-The fact that we are now not always operating inside the ```root`` function
+The fact that we are now not always operating inside the ``root`` function
 means that we can't simply branch to the dispatcher when we need it.
-For this purpose we have introduced a custom exception handling mechanism to be
+For this purpose, we have introduced a custom exception handling mechanism to be
 able to restore the execution from the dispatcher when things do not go as
 expected.
 
 The main idea is to have a sort of separation between the world of the isolated
 functions and the ``root`` function. In this way, as soon as possible after the
-start of the execution of the program, we try to jump in the *isolated* world
+start of the execution of the program, we try to jump into the *isolated* world
 and continue the execution from there. When we are not anymore able to continue
 the execution in the *isolated* world we generate an exception that restores the
 execution in the other world.
@@ -687,31 +687,31 @@ substitute the code of the entry block with this:
 In this way when we reach a point, inside the body of a function, where we need
 the dispatcher we can use the ``_Unwind_RaiseException`` function provided by
 ``libunwind`` to restore the execution in the ``root`` function, where we take
-care of doing the right action to correctly continue the execution(i.e. invoke)
+care of doing the right action to correctly continue the execution (i.e. invoke)
 the dispatcher.
 
 Due to implementation details, we do not rely on the standard mechanism used by
-the C++ excpetion handling mechanism. For this reason the ``catchblock`` is not
+the C++ exception handling mechanism. For this reason, the ``catchblock`` is not
 used, but we always transfer the execution to the ``invoke_return`` block, and
 we then check for the value of ``ExceptionFlag`` for deciding where to transfer
 the execution.
-After this we transfer the control flow to the ``dispatcher.entry`` block for
+After this, we transfer the control flow to the ``dispatcher.entry`` block for
 resuming the execution in the correct manner.
 
 We then need a ``function_dispatcher`` that acts as a normal dispatcher but is
-used in presence of an indirect function call and assumes the form of a LLVM
-function. Obviously the possible targets are only the function entry blocks,
+used in presence of an indirect function call and assumes the form of an LLVM
+function. Obviously, the possible targets are only the function entry blocks,
 since it is not possible that a function call requires to jump in the middle of
 the code of a function.
 
 We also add an extra check after each call to the ``function_dispatcher`` to
 ensure that the program counter value is the one that we expect to have after
-the call. This mechanism is usefull to avoid errors due to a bad identification
+the call. This mechanism is useful to avoid errors due to a bad identification
 of ``ret`` instructions by the function boundaries analysis.
 
 During the execution of the translated program, when an exception is raised, the
 ``exception_warning`` helper function is called, and it will print on ``stdout``
-useful informations about the conditions that caused the exception (e.g. the
+useful information about the conditions that caused the exception (e.g. the
 current program counter at the moment of the exception, the next program
 counter, etc.).
 
