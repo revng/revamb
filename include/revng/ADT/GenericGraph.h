@@ -523,6 +523,7 @@ public:
   static constexpr bool AreEdgesLabeled = !std::is_same_v<EdgeLabel, Empty>;
 
 public:
+  using Edge = EdgeLabel;
   using EdgeView = std::conditional_t<AreEdgesLabeled,
                                       detail::EdgeView<DerivedType, EdgeLabel>,
                                       detail::UnlabeledView<DerivedType>>;
