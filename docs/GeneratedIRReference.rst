@@ -27,7 +27,7 @@ program compiled for x86-64:
       return a + myfunction();
     }
 
-The program has been compiled as follows:
+The program has been compiled as follows (note that for this step we are using the x86_64 compiler toolchain provided with orchestra, you can type ``orc install toolchain/x86-64/gcc`` to install it):
 
 .. code-block:: sh
 
