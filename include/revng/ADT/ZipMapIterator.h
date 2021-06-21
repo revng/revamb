@@ -13,6 +13,7 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/iterator.h"
 
+#include "llvm/ADT/DenseMap.h"
 #include "revng/ADT/KeyedObjectContainer.h"
 #include "revng/Support/Assert.h"
 
@@ -29,9 +30,12 @@ concept HasMappedType = requires {
 // clang-format off
 template<typename T>
 concept MapLike = HasKeyType<T> and HasMappedType<T>
-  and std::is_same_v<typename T::value_type,
-                     std::pair<const typename T::key_type,
-                               typename T::mapped_type>>;
+  and ((std::is_same_v<typename T::value_type,
+                       std::pair<const typename T::key_type,
+                                 typename T::mapped_type>>) or
+       (std::is_same_v<typename T::value_type,
+                       llvm::detail::DenseMapPair<typename T::key_type,
+                                                  typename T::mapped_type>>));
 
 template<typename T>
 concept SetLike = HasKeyType<T> and not HasMappedType<T>
