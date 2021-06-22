@@ -39,7 +39,6 @@
 #include "llvm/Transforms/Utils/CodeExtractor.h"
 #include "llvm/Transforms/Utils/Mem2Reg.h"
 
-#include "revng/ABIAnalyses/ABIAnalysis.h"
 #include "revng/ADT/Queue.h"
 #include "revng/BasicAnalyses/RemoveHelperCalls.h"
 #include "revng/BasicAnalyses/RemoveNewPCCalls.h"
@@ -371,27 +370,59 @@ FunctionSummary CFEPAnalyzer<FunctionOracle>::analyze(
   const std::vector<llvm::GlobalVariable *> &ABIRegisters,
   llvm::BasicBlock *Entry) {
   using namespace llvm;
-  using namespace ABIAnalyses;
 
-  Value *RA = nullptr;
-  const auto *PCH = GCBI->programCounterHandler();
+  Instruction *Last = nullptr;
+  IRBuilder<> Builder(M.getContext());
   StructType *MetaAddressTy = MetaAddress::getStruct(&M);
 
   // Run function boundaries detection, and retrieve the outlined function.
   Function *OutFunc = createDisposableFunction(Entry);
 
-  // Retrieve results of the ABI analyses
-  ABIAnalysesResults
+  // Initialize ret hook marker, needed for the ABI analyses on return values.
+  for (auto &BB : *OutFunc)
+    if (auto *Ret = dyn_cast<ReturnInst>(&BB.back()))
+      Last = Ret;
+
+  if (Last) {
+    for (auto *Pred : predecessors(Last->getParent())) {
+      auto *Term = Pred->getTerminator();
+      Builder.SetInsertPoint(Term);
+      auto [NewPCStruct, _] = getPC(Term);
+      Builder.CreateCall(RetHookMarker,
+                         { NewPCStruct.toConstant(MetaAddressTy),
+                           MetaAddress::invalid().toConstant(MetaAddressTy) });
+    }
+  }
+
+  // Find registers that may be target of at least one store. This will help
+  // refine the final results.
+  std::set<GlobalVariable *> WrittenRegisters;
+  for (auto &BB : *OutFunc) {
+    for (auto &I : BB) {
+      if (auto *SI = dyn_cast<StoreInst>(&I)) {
+        Value *Ptr = skipCasts(SI->getPointerOperand());
+        if (auto *GV = dyn_cast<GlobalVariable>(Ptr))
+          WrittenRegisters.insert(GV);
+      }
+    }
+  }
+
+  // Retrieve results of the ABI analyses.
+  ABIAnalyses::ABIAnalysesResults
     ABIResults = ABIAnalyses::analyzeOutlinedFunction(OutFunc,
                                                       *GCBI,
-                                                      PreHookMarker);
+                                                      PreHookMarker,
+                                                      RetHookMarker);
 
   // Identify the callee-saved registers and tell if a function returns
   // properly, i.e., it jumps to the return address. To achieve this, we craft
   // the IR by loading the PC, the SP, as well as the ABI registers CSVs
   // respectively at function entry and end. We win when the subtraction between
   // their entry and end values is zero.
-  IRBuilder<> Builder(&OutFunc->getEntryBlock().front());
+  Value *RA = nullptr;
+  const auto *PCH = GCBI->programCounterHandler();
+  Builder.SetInsertPoint(&OutFunc->getEntryBlock().front());
+
   auto *IntPtrTy = GCBI->spReg()->getType();
   auto *IntTy = GCBI->spReg()->getType()->getElementType();
 
@@ -463,11 +494,7 @@ FunctionSummary CFEPAnalyzer<FunctionOracle>::analyze(
   IndirectBranchInfoMarker->addFnAttr(Attribute::NoUnwind);
   IndirectBranchInfoMarker->addFnAttr(Attribute::NoReturn);
 
-  Instruction *Last = nullptr;
   SmallVector<Instruction *, 4> Returns;
-  for (auto &BB : *OutFunc)
-    if (auto *Ret = dyn_cast<ReturnInst>(&BB.back()))
-      Last = Ret;
 
   if (Last) {
     for (auto *Pred : predecessors(Last->getParent())) {
@@ -614,7 +641,10 @@ FunctionSummary CFEPAnalyzer<FunctionOracle>::analyze(
   getOption<unsigned>(Options, "memdep-block-scan-limit")
     ->setInitialValue(MemDepBlockScanLimitDefault);
 
-  FunctionSummary FunctionInfo = milkResults(ABIRegisters, OutFunc);
+  FunctionSummary FunctionInfo = milkResults(ABIRegisters,
+                                             ABIResults,
+                                             WrittenRegisters,
+                                             OutFunc);
 
   // Is the disposable function a FakeFunction? If so, return a
   // copy of the unoptimized disposable function.
@@ -629,6 +659,8 @@ FunctionSummary CFEPAnalyzer<FunctionOracle>::analyze(
 template<class FunctionOracle>
 FunctionSummary CFEPAnalyzer<FunctionOracle>::milkResults(
   const std::vector<llvm::GlobalVariable *> &ABIRegisters,
+  ABIAnalyses::ABIAnalysesResults &ABIResults,
+  const std::set<llvm::GlobalVariable *> &WrittenRegisters,
   llvm::Function *F) {
   using namespace llvm;
 
@@ -713,6 +745,66 @@ FunctionSummary CFEPAnalyzer<FunctionOracle>::milkResults(
   std::erase_if(ClobberedRegs, [&](const auto &E) {
     return CalleeSavedRegs.find(E) != CalleeSavedRegs.end();
   });
+
+  // We say that a register is callee-saved when, besides being preserved by the
+  // callee, there is at least a write onto this register.
+  std::set<GlobalVariable *> ActualCalleeSavedRegs;
+  std::set_intersection(CalleeSavedRegs.begin(),
+                        CalleeSavedRegs.end(),
+                        WrittenRegisters.begin(),
+                        WrittenRegisters.end(),
+                        std::inserter(ActualCalleeSavedRegs,
+                                      ActualCalleeSavedRegs.begin()));
+
+  // Union between effective callee-saved registers and SP.
+  std::set<GlobalVariable *> CalleeSavedAndStackPointerRegs = {
+    ActualCalleeSavedRegs
+  };
+  CalleeSavedAndStackPointerRegs.insert(GCBI->spReg());
+
+  // Refine ABI analyses by suppressing callee-saved and stack pointer registers
+  // from the final results.
+  for (const auto &Reg : CalleeSavedAndStackPointerRegs) {
+    if (ABIResults.Arguments.count(Reg) != 0)
+      ABIResults.Arguments[Reg] = model::RegisterState::Values::No;
+  }
+
+  for (const auto &[K, _] : ABIResults.CallSites) {
+    for (const auto &Reg : CalleeSavedAndStackPointerRegs) {
+      if (ABIResults.CallSites[K].Arguments.count(Reg) != 0)
+        ABIResults.CallSites[K]
+          .Arguments[Reg] = model::RegisterState::Values::No;
+
+      if (ABIResults.CallSites[K].ReturnValues.count(Reg) != 0)
+        ABIResults.CallSites[K]
+          .ReturnValues[Reg] = model::RegisterState::Values::No;
+    }
+  }
+
+  for (const auto &E : Result) {
+    if (E.second != FunctionEdgeTypeValue::Return
+        && E.second != FunctionEdgeTypeValue::IndirectTailCall) {
+      auto PC = MetaAddress::fromConstant(E.first->getOperand(2));
+
+      auto It = ABIResults.ReturnValues.find(PC);
+      if (It != ABIResults.ReturnValues.end())
+        ABIResults.ReturnValues.erase(PC);
+    }
+  }
+
+  for (const auto &[K, _] : ABIResults.ReturnValues) {
+    for (const auto &Reg : CalleeSavedAndStackPointerRegs)
+      if (ABIResults.ReturnValues[K].count(Reg) != 0)
+        ABIResults.ReturnValues[K][Reg] = model::RegisterState::Values::No;
+  }
+
+  ABIAnalyses::finalizeReturnValues(ABIResults);
+
+  if (StackAnalysisLog.isEnabled()) {
+    StackAnalysisLog << "Dumping final ABIAnalyses results for function "
+                     << F->getName() << ": \n";
+    ABIResults.dump();
+  }
 
   return FunctionSummary(Type, ClobberedRegs, WinFSO, nullptr);
 }
@@ -988,6 +1080,13 @@ bool StackAnalysis::runOnModule(Module &M) {
   PostHookMarker->addFnAttr(llvm::Attribute::ReadOnly);
   PostHookMarker->addFnAttr(llvm::Attribute::NoUnwind);
 
+  auto *RetHookMarker = Function::Create(FTy,
+                                         llvm::GlobalValue::ExternalLinkage,
+                                         "retcall_hook",
+                                         M);
+  RetHookMarker->addFnAttr(llvm::Attribute::ReadOnly);
+  RetHookMarker->addFnAttr(llvm::Attribute::NoUnwind);
+
   // Queue to be populated with the CFEP.
   llvm::SmallVector<BasicBlock *, 8> Worklist;
   llvm::SmallVector<BasicBlockNode *, 4> EntryBlocks;
@@ -1100,7 +1199,12 @@ bool StackAnalysis::runOnModule(Module &M) {
               "Analyzing Entry: " << EntryNode->BB->getName());
 
     // Intraprocedural analysis.
-    CFEPA Analyzer(M, &GCBI, Properties, PreHookMarker, PostHookMarker);
+    CFEPA Analyzer(M,
+                   &GCBI,
+                   Properties,
+                   PreHookMarker,
+                   PostHookMarker,
+                   RetHookMarker);
     FunctionSummary Res = Analyzer.analyze(ABIRegisters, EntryNode->BB);
     bool Changed = Properties.registerFunction(EntryNode->BB, std::move(Res));
 

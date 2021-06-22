@@ -15,6 +15,7 @@
 #include "llvm/Support/DOTGraphTraits.h"
 #include "llvm/Support/GraphWriter.h"
 
+#include "revng/ABIAnalyses/ABIAnalysis.h"
 #include "revng/ADT/GenericGraph.h"
 #include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/FunctionCallIdentification/FunctionCallIdentification.h"
@@ -170,6 +171,7 @@ class CFEPAnalyzer {
   FunctionOracle &Oracle;
   llvm::Function *PreHookMarker;
   llvm::Function *PostHookMarker;
+  llvm::Function *RetHookMarker;
   llvm::Function *IndirectBranchInfoMarker;
   OpaqueFunctionsPool<llvm::StringRef> OFPRegistersClobbered;
 
@@ -178,13 +180,15 @@ public:
                GeneratedCodeBasicInfo *GCBI,
                FunctionOracle &Oracle,
                llvm::Function *PreHookMarker,
-               llvm::Function *PostHookMarker) :
+               llvm::Function *PostHookMarker,
+               llvm::Function *RetHookMarker) :
     M(M),
     Context(M.getContext()),
     GCBI(GCBI),
     Oracle(Oracle),
     PreHookMarker(PreHookMarker),
     PostHookMarker(PostHookMarker),
+    RetHookMarker(RetHookMarker),
     OFPRegistersClobbered(&M, false) {}
 
 public:
@@ -195,8 +199,10 @@ private:
   llvm::Function *createDisposableFunction(llvm::BasicBlock *BB);
   llvm::BasicBlock *integrateFunctionCallee(llvm::BasicBlock *BB);
   void throwDisposableFunction(llvm::Function *F);
-  FunctionSummary
-  milkResults(const std::vector<llvm::GlobalVariable *> &, llvm::Function *F);
+  FunctionSummary milkResults(const std::vector<llvm::GlobalVariable *> &,
+                              ABIAnalyses::ABIAnalysesResults &,
+                              const std::set<llvm::GlobalVariable *> &,
+                              llvm::Function *F);
 };
 
 } // namespace StackAnalysis
