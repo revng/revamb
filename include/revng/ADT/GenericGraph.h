@@ -864,6 +864,41 @@ public:
     return *this;
   }
 
+public:
+  SuccessorEdgeIterator successorEdgeAt(size_t Index) {
+    return SuccessorEdgeIterator(std::next(Successors.begin(), Index),
+                                 SuccessorFilters::ToView);
+  }
+  ConstSuccessorEdgeIterator successorEdgeAt(size_t Index) const {
+    return ConstSuccessorEdgeIterator(std::next(Successors.begin(), Index),
+                                      SuccessorFilters::ToConstView);
+  }
+  PredecessorEdgeIterator predecessorEdgeAt(size_t Index) {
+    return PredecessorEdgeIterator(std::next(Predecessors.begin(), Index),
+                                   PredecessorFilters::ToView);
+  }
+  ConstPredecessorEdgeIterator predecessorEdgeAt(size_t Index) const {
+    return ConstPredecessorEdgeIterator(std::next(Predecessors.begin(), Index),
+                                        PredecessorFilters::ToConstView);
+  }
+
+  SuccessorIterator successorAt(size_t Index) {
+    return SuccessorIterator(std::next(Successors.begin(), Index),
+                             SuccessorFilters::ToNeighbor);
+  }
+  ConstSuccessorIterator successorAt(size_t Index) const {
+    return ConstSuccessorIterator(std::next(Successors.begin(), Index),
+                                  SuccessorFilters::ToConstNeighbor);
+  }
+  PredecessorIterator predecessorAt(size_t Index) {
+    return PredecessorIterator(std::next(Predecessors.begin(), Index),
+                               PredecessorFilters::ToNeighbor);
+  }
+  ConstPredecessorIterator predecessorAt(size_t Index) const {
+    return ConstPredecessorIterator(std::next(Predecessors.begin(), Index),
+                                    PredecessorFilters::ToConstNeighbor);
+  }
+
 protected:
   std::tuple<OwningEdge, NonOwningEdge>
   constructEdge(MutableEdgeNode &From, MutableEdgeNode &To, EdgeLabel &&EL) {
@@ -984,6 +1019,10 @@ public:
   nodes_iterator removeNode(Node const *NodePtr) {
     return removeNode(findNode(NodePtr));
   }
+
+public:
+  NodeT *nodeAt(size_t Index) { return std::next(Nodes.begin(), Index).get(); }
+  NodeT const *nodeAt(size_t Index) const { return std::next(Nodes.begin(), Index).get(); }
 
 private:
   NodesContainer Nodes;
