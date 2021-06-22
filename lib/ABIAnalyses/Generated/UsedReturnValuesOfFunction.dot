@@ -16,9 +16,8 @@ digraph UsedReturnValuesOfFunction {
 
   # Transfer functions
   Maybe->YesOrDead [label="Write"];
-  Maybe->YesOrDead [label="WeakWrite"];
   Maybe->Unknown [label="Read"];
-
+  Maybe->Unknown [label="WeakWrite"];
   Maybe->Maybe [label="None"];
 
 }
