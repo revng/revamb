@@ -45,7 +45,7 @@ find_package(LLVM REQUIRED CONFIG)
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 llvm_map_components_to_libnames(LLVM_LIBRARIES core support irreader ScalarOpts
-  linker Analysis object transformutils InstCombine CodeGen Passes)
+	linker Analysis object transformutils InstCombine CodeGen Passes BitWriter InstCombine)
 
 # Build the support module for each architecture and in several configurations
 set(CLANG "${LLVM_TOOLS_BINARY_DIR}/clang")
@@ -192,7 +192,7 @@ copy_to_build_and_install(PROGRAMS
   bin
   "scripts/check-revng-conventions"
   "scripts/revng-merge-dynamic"
-  "scripts/revng-dump-model")
+  )
 
 copy_to_build_and_install(FILES
   bin/revng_merge_dynamic
@@ -201,7 +201,15 @@ copy_to_build_and_install(FILES
   "scripts/revng_merge_dynamic/log.py"
   "scripts/revng_merge_dynamic/merge_dynamic.py"
   "scripts/revng_merge_dynamic/parsed_elf.py"
-  "scripts/revng_merge_dynamic/util.py")
+  "scripts/revng_merge_dynamic/util.py"
+  )
+
+copy_to_build_and_install(FILES
+  bin/revng_dump_model
+  "scripts/revng_dump_model/__init__.py"
+  "scripts/revng_dump_model/__main__.py"
+  "scripts/revng_dump_model/dump_model.py"
+  )
 
 #
 # Export CMake targets

@@ -3,3 +3,5 @@
 #
 
 add_subdirectory(revng-lift)
+add_subdirectory(revng-autoenforcer)
+add_subdirectory(revng-translate2)

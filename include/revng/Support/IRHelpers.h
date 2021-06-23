@@ -1142,3 +1142,6 @@ inline cppcoro::generator<llvm::CallBase *> callers(llvm::Function *F) {
     }
   }
 }
+
+/// Extract MD text from MDString or GlobalVariable
+llvm::StringRef getText(const llvm::Instruction *I, unsigned Kind);

@@ -24,6 +24,7 @@ class FunctionEdge;
 class CallEdge;
 class FunctionABIRegister;
 class BasicBlock;
+class Segment;
 } // namespace model
 
 // TODO: Prevent changing the keys. Currently we need them to be public and
@@ -907,16 +908,51 @@ struct KeyedObjectTraits<model::Function> {
 static_assert(IsKeyedObjectContainer<MutableSet<model::Function>>);
 
 //
+// Segment
+//
+class model::Segment {
+public:
+  MetaAddress Start;
+  MetaAddress End;
+  std::string Name;
+
+public:
+  Segment(MetaAddress Start) : Start(Start), End(MetaAddress::invalid()) {}
+  Segment() : Segment(MetaAddress::invalid()) {}
+
+  bool operator==(const Segment &) const = default;
+};
+
+INTROSPECTION_NS(model, Segment, Start, End, Name);
+
+template<>
+struct llvm::yaml::MappingTraits<model::Segment>
+  : public TupleLikeMappingTraits<model::Segment> {};
+
+template<>
+struct KeyedObjectTraits<model::Segment> {
+  static MetaAddress key(const model::Segment &F) { return F.Start; }
+  static model::Segment fromKey(const MetaAddress &Key) {
+    return model::Segment(Key);
+  };
+};
+
+static_assert(IsKeyedObjectContainer<SortedVector<model::Segment>>);
+
+//
 // Binary
 //
 class model::Binary {
 public:
+  std::string Name;
+  SortedVector<model::Segment> Segments;
+  SortedVector<std::string> ImportedLibraries;
   MutableSet<model::Function> Functions;
 
 public:
   bool verify() const debug_function;
 };
-INTROSPECTION_NS(model, Binary, Functions)
+INTROSPECTION_NS(model, Binary, Name, Segments, ImportedLibraries, Functions)
 
 template<>
 struct llvm::yaml::MappingTraits<model::Binary>

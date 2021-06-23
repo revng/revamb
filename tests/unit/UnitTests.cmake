@@ -277,13 +277,29 @@ target_compile_definitions(test_upcastablepointer
 target_include_directories(test_upcastablepointer
   PRIVATE "${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_upcastablepointer
-  revngSupport
-  revngUnitTestHelpers
-  revngModel
   Boost::unit_test_framework
   ${LLVM_LIBRARIES})
 add_test(NAME test_upcastablepointer COMMAND ./bin/test_upcastablepointer)
 set_tests_properties(test_upcastablepointer PROPERTIES LABELS "unit")
+
+#
+# test_autoenforcer
+#
+
+revng_add_private_executable(test_autoenforcer "${SRC}/AutoEnforcer.cpp")
+target_compile_definitions(test_autoenforcer
+  PRIVATE "BOOST_TEST_DYN_LINK=1")
+target_include_directories(test_autoenforcer
+  PRIVATE "${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_autoenforcer
+  revngSupport
+  revngUnitTestHelpers
+  revngAutoEnforcer
+  Boost::unit_test_framework
+  ${LLVM_LIBRARIES})
+add_test(NAME test_autoenforcer COMMAND ./bin/test_autoenforcer)
+set_tests_properties(test_autoenforcer PROPERTIES LABELS "unit")
+
 
 #
 # test_recursive_coroutines

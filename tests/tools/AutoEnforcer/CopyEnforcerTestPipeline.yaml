@@ -1,0 +1,10 @@
+Containers:
+ - Name:            Strings1
+   Type:            StringContainer
+ - Name:            Strings2
+   Type:            StringContainer
+Steps:
+ - Name:            FirstStep
+   Enforcers:
+     - Name:             CopyEnforcer
+       UsedContainers: [Strings1, Strings2]
