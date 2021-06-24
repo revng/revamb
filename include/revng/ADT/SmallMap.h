@@ -352,6 +352,10 @@ public:
       return const_iterator(Map.lower_bound(Key));
   }
 
+  bool contains(const K &Key) const {
+    return find(Key) != end();
+  }
+
   void clear() {
     // TODO: we should invoke some destructors at a certain point
     Size = 0;

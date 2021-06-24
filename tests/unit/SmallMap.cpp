@@ -102,3 +102,14 @@ BOOST_AUTO_TEST_CASE(CustomCompare) {
   revng_check(MIt != Map.end());
   revng_check(RIt->second == MIt->second);
 }
+
+BOOST_AUTO_TEST_CASE(Contains) {
+  SmallMap<int, int, 1, std::greater<int>> Map;
+  int Value = 42;
+
+  revng_check(!Map.contains(Value));
+
+  Map.insert({ Value, 1 });
+  revng_check(Map.contains(Value));
+  revng_check(!Map.contains(Value + 1));
+}
