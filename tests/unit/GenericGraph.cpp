@@ -177,11 +177,11 @@ static DiamondGraph<NodeType> createGraph() {
 
   // Create edges
   if constexpr (UseRefs) {
-    DG.Root->addSuccessor(*DG.Then, { 7 });
-    DG.Root->addSuccessor(*DG.Else, { 1 });
+    DG.Root->addSuccessor(DG.Then, { 7 });
+    DG.Root->addSuccessor(DG.Else, { 1 });
 
-    DG.Then->addSuccessor(*DG.Final, { 2 });
-    DG.Else->addSuccessor(*DG.Final, { 3 });
+    DG.Then->addSuccessor(DG.Final, { 2 });
+    DG.Else->addSuccessor(DG.Final, { 3 });
   } else {
     DG.Root->addSuccessor(DG.Then, { 7 });
     DG.Root->addSuccessor(DG.Else, { 1 });
@@ -330,71 +330,71 @@ BOOST_AUTO_TEST_CASE(BasicMutableEdgeNodeTest) {
   using Graph = GenericGraph<MutableEdgeNode<SomeNode, SomeEdge>>;
 
   Graph G;
-  auto &A = *G.addNode("A");
-  auto &B = *G.addNode("B");
+  auto *A = G.addNode("A");
+  auto *B = G.addNode("B");
 
-  A.addSuccessor(A, SomeEdge::PointType{ 1.0, 0.1 });
-  A.addSuccessor(B, SomeEdge::PointType{ 1.0, 0.2 });
-  B.addSuccessor(A, SomeEdge::PointType{ 1.0, 0.3 });
+  A->addSuccessor(A, SomeEdge::PointType{ 1.0, 0.1 });
+  A->addSuccessor(B, SomeEdge::PointType{ 1.0, 0.2 });
+  B->addSuccessor(A, SomeEdge::PointType{ 1.0, 0.3 });
 
-  revng_check(A.successorCount() == 2);
-  revng_check(A.predecessorCount() == 2);
-  revng_check(B.successorCount() == 1);
-  revng_check(B.predecessorCount() == 1);
+  revng_check(A->successorCount() == 2);
+  revng_check(A->predecessorCount() == 2);
+  revng_check(B->successorCount() == 1);
+  revng_check(B->predecessorCount() == 1);
 
   for (auto *Node : G.nodes()) {
     revng_check(!Node->Text.empty());
     for (auto [Neighbor, Edge] : Node->successor_edges()) {
-      revng_check(!Neighbor.Text.empty());
-      for (auto &Point : Edge.Points)
+      revng_check(!Neighbor->Text.empty());
+      for (auto &Point : Edge->Points)
         revng_check(Point.X == 1.0 && Point.Y < 0.4 && Point.Y > 0.0);
     }
   }
   for (auto *Node : G.nodes()) {
     revng_check(!Node->Text.empty());
     for (auto [Neighbor, Edge] : Node->predecessor_edges()) {
-      revng_check(!Neighbor.Text.empty());
-      for (auto &Point : Edge.Points)
+      revng_check(!Neighbor->Text.empty());
+      for (auto &Point : Edge->Points)
         revng_check(Point.X == 1.0 && Point.Y < 0.4 && Point.Y > 0.0);
     }
   }
 
-  revng_check(A.hasSuccessor(B) && B.hasPredecessor(A));
-  revng_check(B.hasSuccessor(A) && A.hasPredecessor(B));
-  A.removeSuccessor(B);
-  revng_check(!(A.hasSuccessor(B) && B.hasPredecessor(A)));
-  revng_check(B.hasSuccessor(A) && A.hasPredecessor(B));
+  revng_check(A->hasSuccessor(B) && B->hasPredecessor(A));
+  revng_check(B->hasSuccessor(A) && A->hasPredecessor(B));
+  A->removeSuccessor(B);
+  revng_check(!(A->hasSuccessor(B) && B->hasPredecessor(A)));
+  revng_check(B->hasSuccessor(A) && A->hasPredecessor(B));
 
-  revng_check(A.hasSuccessor(A) && A.hasPredecessor(A));
-  A.removeSuccessor(A);
-  revng_check(!(A.hasSuccessor(A) && A.hasPredecessor(A)));
+  revng_check(A->hasSuccessor(A) && A->hasPredecessor(A));
+  A->removeSuccessor(A);
+  revng_check(!(A->hasSuccessor(A) && A->hasPredecessor(A)));
 
-  A.addSuccessor(B, SomeEdge::PointType{ 1.0, 0.4 });
-  A.addSuccessor(A, SomeEdge::PointType{ 1.0, 0.5 });
-  B.addSuccessor(B, SomeEdge::PointType{ 1.0, 0.6 });
+  A->addSuccessor(B, SomeEdge::PointType{ 1.0, 0.4 });
+  A->addSuccessor(A, SomeEdge::PointType{ 1.0, 0.5 });
+  B->addSuccessor(B, SomeEdge::PointType{ 1.0, 0.6 });
 
-  revng_check(A.successorCount() == 2);
-  revng_check(A.predecessorCount() == 2);
-  revng_check(B.successorCount() == 2);
-  revng_check(B.predecessorCount() == 2);
-  G.removeNode(&A);
-  revng_check(B.successorCount() == 1);
-  revng_check(B.predecessorCount() == 1);
+  revng_check(A->successorCount() == 2);
+  revng_check(A->predecessorCount() == 2);
+  revng_check(B->successorCount() == 2);
+  revng_check(B->predecessorCount() == 2);
+  G.removeNode(A);
+  revng_check(B->successorCount() == 1);
+  revng_check(B->predecessorCount() == 1);
 }
 
 BOOST_AUTO_TEST_CASE(MutableEdgeNodeNoEdgeLabelsTest) {
   GenericGraph<MutableEdgeNode<std::string>> Graph;
-  auto &A = *Graph.addNode("A");
-  auto &B = *Graph.addNode("B");
+  auto *A = Graph.addNode("A");
+  auto *B = Graph.addNode("B");
 
-  revng_check(!A.hasSuccessor(B) && !B.hasPredecessor(A));
-  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
-  A.addSuccessor(B);
-  revng_check(A.hasSuccessor(B) && B.hasPredecessor(A));
-  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
-  A.removeSuccessor(B);
-  revng_check(!A.hasSuccessor(B) && !B.hasPredecessor(A));
-  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
+  revng_check(!A->hasSuccessor(B) && !B->hasPredecessor(A));
+  revng_check(!B->hasSuccessor(A) && !A->hasPredecessor(B));
+  A->addSuccessor(B);
+  revng_check(A->hasSuccessor(B) && B->hasPredecessor(A));
+  revng_check(!B->hasSuccessor(A) && !A->hasPredecessor(B));
+  A->removeSuccessor(B);
+  revng_check(!A->hasSuccessor(B) && !B->hasPredecessor(A));
+  revng_check(!B->hasSuccessor(A) && !A->hasPredecessor(B));
 }
 
 using TestMutableEdgeNode = MutableEdgeNode<TestNodeData, TestEdgeLabel>;
@@ -422,7 +422,7 @@ BOOST_AUTO_TEST_CASE(MutableEdgeNodeFilterGraphTraitsTest) {
     using Node = decltype(DG)::Node;
     using TestType = bool (*)(typename Node::EdgeView const &);
     constexpr TestType TestLambda = [](typename Node::EdgeView const &Edge) {
-      return Edge.Label.Weight > 5;
+      return Edge.Label->Weight > 5;
     };
     using EFGT = GraphTraits<EdgeFilteredGraph<Node *, TestLambda>>;
     using efdf_iterator = df_iterator<Node *,
@@ -437,29 +437,29 @@ BOOST_AUTO_TEST_CASE(MutableEdgeNodeFilterGraphTraitsTest) {
 
 BOOST_AUTO_TEST_CASE(MutableEdgeNodeRemovalTest) {
   GenericGraph<MutableEdgeNode<std::string, double>> Graph;
-  auto &A = *Graph.addNode("A");
-  auto &B = *Graph.addNode("B");
-  auto &C = *Graph.addNode("C");
+  auto *A = Graph.addNode("A");
+  auto *B = Graph.addNode("B");
+  auto *C = Graph.addNode("C");
 
-  revng_check(!A.hasSuccessor(B) && !B.hasPredecessor(A));
-  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
-  A.addSuccessor(B);
-  revng_check(A.hasSuccessor(B) && B.hasPredecessor(A));
-  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
-  A.removeSuccessor(B);
-  revng_check(!A.hasSuccessor(B) && !B.hasPredecessor(A));
-  revng_check(!B.hasSuccessor(A) && !A.hasPredecessor(B));
+  revng_check(!A->hasSuccessor(B) && !B->hasPredecessor(A));
+  revng_check(!B->hasSuccessor(A) && !A->hasPredecessor(B));
+  A->addSuccessor(B);
+  revng_check(A->hasSuccessor(B) && B->hasPredecessor(A));
+  revng_check(!B->hasSuccessor(A) && !A->hasPredecessor(B));
+  A->removeSuccessor(B);
+  revng_check(!A->hasSuccessor(B) && !B->hasPredecessor(A));
+  revng_check(!B->hasSuccessor(A) && !A->hasPredecessor(B));
 
-  A.addSuccessor(A);
-  A.addSuccessor(B);
-  A.addSuccessor(C);
+  A->addSuccessor(A);
+  A->addSuccessor(B);
+  A->addSuccessor(C);
 
-  revng_check(A.successorCount() == 3);
-  revng_check(A.predecessorCount() == 1);
-  revng_check(B.successorCount() == 0);
-  revng_check(B.predecessorCount() == 1);
-  revng_check(C.successorCount() == 0);
-  revng_check(C.predecessorCount() == 1);
+  revng_check(A->successorCount() == 3);
+  revng_check(A->predecessorCount() == 1);
+  revng_check(B->successorCount() == 0);
+  revng_check(B->predecessorCount() == 1);
+  revng_check(C->successorCount() == 0);
+  revng_check(C->predecessorCount() == 1);
 
   size_t Counter = 0;
   for (auto *From : Graph.nodes()) {
@@ -472,38 +472,38 @@ BOOST_AUTO_TEST_CASE(MutableEdgeNodeRemovalTest) {
   }
   revng_check(Counter == 1);
 
-  for (auto Iterator = A.successors().begin();
-       Iterator != A.successors().end();) {
+  for (auto Iterator = A->successors().begin();
+       Iterator != A->successors().end();) {
     revng_check(!(*Iterator)->empty());
-    if (**Iterator != B)
-      Iterator = A.removeSuccessor(Iterator);
+    if (**Iterator != *B)
+      Iterator = A->removeSuccessor(Iterator);
     else
       ++Iterator;
   }
 
-  revng_check(A.successorCount() == 1);
-  revng_check(A.predecessorCount() == 0);
-  revng_check(B.successorCount() == 0);
-  revng_check(B.predecessorCount() == 1);
-  revng_check(C.successorCount() == 0);
-  revng_check(C.predecessorCount() == 0);
+  revng_check(A->successorCount() == 1);
+  revng_check(A->predecessorCount() == 0);
+  revng_check(B->successorCount() == 0);
+  revng_check(B->predecessorCount() == 1);
+  revng_check(C->successorCount() == 0);
+  revng_check(C->predecessorCount() == 0);
 
-  A.addSuccessor(A);
-  A.addSuccessor(C);
+  A->addSuccessor(A);
+  A->addSuccessor(C);
 
-  for (auto Iterator = A.successor_edges().begin();
-       Iterator != A.successor_edges().end();) {
-    revng_check(!Iterator->Neighbor.empty());
-    if (Iterator->Neighbor != C)
-      Iterator = A.removeSuccessor(Iterator);
+  for (auto Iterator = A->successor_edges().begin();
+       Iterator != A->successor_edges().end();) {
+    revng_check(!Iterator->Neighbor->empty());
+    if (*Iterator->Neighbor != *C)
+      Iterator = A->removeSuccessor(Iterator);
     else
       ++Iterator;
   }
 
-  revng_check(A.successorCount() == 1);
-  revng_check(A.predecessorCount() == 0);
-  revng_check(B.successorCount() == 0);
-  revng_check(B.predecessorCount() == 0);
-  revng_check(C.successorCount() == 0);
-  revng_check(C.predecessorCount() == 1);
+  revng_check(A->successorCount() == 1);
+  revng_check(A->predecessorCount() == 0);
+  revng_check(B->successorCount() == 0);
+  revng_check(B->predecessorCount() == 0);
+  revng_check(C->successorCount() == 0);
+  revng_check(C->predecessorCount() == 1);
 }
