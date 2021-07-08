@@ -790,6 +790,19 @@ void JumpTargetManager::translateIndirectJumps() {
   ExitTB = nullptr;
 }
 
+/// Clean OriginalInstructionAddresses and repopulate it coherently.
+void JumpTargetManager::repopulate() {
+
+  OriginalInstructionAddresses.clear();
+  Function *NewPCFunction = TheModule.getFunction("newpc");
+  revng_assert(NewPCFunction != nullptr);
+  for (CallBase *Call : callers(NewPCFunction)) {
+    MetaAddress PC = GeneratedCodeBasicInfo::getPCFromNewPC(Call);
+    revng_assert(PC.isValid());
+    OriginalInstructionAddresses.insert_or_assign(PC, Call);
+  }
+}
+
 JumpTargetManager::BlockWithAddress JumpTargetManager::peek() {
   // If we just harvested new branches, keep exploring
   do {
@@ -1911,10 +1924,13 @@ void JumpTargetManager::harvest() {
     PreliminaryBranchesPM.add(new TranslateDirectBranchesPass(this));
     PreliminaryBranchesPM.run(TheModule);
 
+    repopulate();
+
     if (empty()) {
       HarvestingStats.push("harvest 3: harvestWithAVI");
       revng_log(JTCountLog, "Harvesting with Advanced Value Info");
       harvestWithAVI();
+      repopulate();
     }
 
     // TODO: eventually, `setCFGForm` should be replaced by using a CustomCFG

@@ -31,6 +31,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_os_ostream.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils.h"
@@ -60,6 +61,11 @@ using std::make_pair;
 using std::string;
 
 // Register all the arguments
+
+static cl::opt<string> EntryPoints("entrypoints",
+                                    cl::desc("<entry points input file>"),
+                                    cl::value_desc("path"),
+                                    cl::ValueRequired);
 
 // TODO: can we drop this and the associated functionality?
 static cl::opt<string> CoveragePath("coverage-path",
@@ -382,7 +388,8 @@ std::string SegmentInfo::generateName() {
   std::stringstream NameStream;
   NameStream << "o_" << (IsReadable ? "r" : "") << (IsWriteable ? "w" : "")
              << (IsExecutable ? "x" : "") << "_0x" << std::hex
-             << StartVirtualAddress.address();
+             << StartVirtualAddress.address() << "_" << "epoch"
+             << StartVirtualAddress.epoch();
 
   return NameStream.str();
 }
@@ -1007,6 +1014,16 @@ void CodeGenerator::translate(Optional<uint64_t> RawVirtualAddress) {
     PCH->initializePC(Builder, VirtualAddress);
   }
 
+  std::fstream EntryFile;
+  EntryFile.open(EntryPoints, std::ios::in);
+  if (EntryFile.is_open()) {
+    string EntryPoint;
+    while (getline(EntryFile, EntryPoint)) {
+      JumpTargets.registerJT(MetaAddress::fromString(EntryPoint), JTReason::GlobalData);
+    }
+    EntryFile.close();
+  }
+
   OpaqueIdentity OI(TheModule.get());
 
   // Fake jumps to the dispatcher-related basic blocks. This way all the blocks
@@ -1029,6 +1046,9 @@ void CodeGenerator::translate(Optional<uint64_t> RawVirtualAddress) {
                                    Binary.architecture(),
                                    TargetArchitecture,
                                    PCH.get());
+
+  uint32_t LastEpoch;
+  bool IsFirstSegment = true;
 
   while (Entry != nullptr) {
     Builder.SetInsertPoint(Entry);
@@ -1053,6 +1073,27 @@ void CodeGenerator::translate(Optional<uint64_t> RawVirtualAddress) {
     default:
       Type = PTC_CODE_REGULAR;
       break;
+    }
+
+    // Update mapping only if the epoch changes
+    if (IsFirstSegment || LastEpoch != VirtualAddress.epoch()) {
+      auto *Segment = Binary.findSegmentByEpoch(VirtualAddress.epoch());
+
+      if (Segment->IsExecutable) {
+
+        size_t Size = static_cast<size_t>(Segment->Data.size());
+        bool Success = ptc.mmap(Segment->StartVirtualAddress.address(),
+                                static_cast<const void *>(Segment->Data.data()),
+                                Size);
+        if (not Success) {
+          dbg << "Couldn't mmap segment starting at ";
+          Segment->StartVirtualAddress.dump(dbg);
+          dbg << " with size 0x" << Size << "\n";
+          revng_abort();
+        }
+      }
+      IsFirstSegment = false;
+      LastEpoch = VirtualAddress.epoch();
     }
 
     ConsumedSize = ptc.translate(VirtualAddress.address(),

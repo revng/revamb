@@ -40,6 +40,10 @@ using LabelList = BinaryFile::LabelList;
 static Logger<> EhFrameLog("ehframe");
 static Logger<> LabelsLog("labels");
 
+// Hack-ish custom PT
+// TODO find a finer way
+constexpr int PT_PAGEBUSTER { 0x8 };
+
 const unsigned char R_MIPS_IMPLICIT_RELATIVE = 255;
 
 namespace nooverflow {
@@ -965,13 +969,18 @@ void BinaryFile::parseELF(object::ObjectFile *TheBinary,
   }
 
   auto RawDataRef = ArrayRef<uint8_t>(TheELF.base(), TheELF.getBufSize());
+  static int EpochCounter { 0 };
 
   for (Elf_Phdr &ProgramHeader : *ProgHeaders) {
     switch (ProgramHeader.p_type) {
+    case PT_PAGEBUSTER:
     case ELF::PT_LOAD: {
+      bool IsPageBuster = (ProgramHeader.p_type == PT_PAGEBUSTER);
+
       using namespace nooverflow;
       SegmentInfo Segment;
-      auto Start = relocate(fromGeneric(ProgramHeader.p_vaddr));
+
+      auto Start = relocate(fromGeneric(ProgramHeader.p_vaddr, IsPageBuster ? EpochCounter : 0));
       Segment.StartVirtualAddress = Start;
       Segment.EndVirtualAddress = Start + u64(ProgramHeader.p_memsz);
       Segment.StartFileOffset = ProgramHeader.p_offset;
@@ -1013,6 +1022,11 @@ void BinaryFile::parseELF(object::ObjectFile *TheBinary,
                                    - u64(ProgramHeader.p_offset));
         ProgramHeaders.Address = PhdrAddress;
       }
+
+      if (IsPageBuster) {
+        EpochCounter++;
+      }
+
     } break;
 
     case ELF::PT_GNU_EH_FRAME:

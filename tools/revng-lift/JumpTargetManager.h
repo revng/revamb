@@ -255,6 +255,9 @@ public:
   /// performed.
   llvm::Function *exitTB() { return ExitTB; }
 
+  /// Clean OriginalInstructionAddresses and repopulate it coherently.
+  void repopulate();
+
   /// \brief Pop from the list of program counters to explore
   ///
   /// \return a pair containing the PC and the initial block to use, or

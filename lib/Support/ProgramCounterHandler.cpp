@@ -511,6 +511,7 @@ public:
     Default(Root->getDefaultDest()),
     SetBlockType(SetBlockType) {
 
+    NewBlocksRegistry = nullptr;
     // Get the switches of the the first MA. This is just in order to get a
     // reference to their conditions
     SwitchInst *EpochSwitch = Root;

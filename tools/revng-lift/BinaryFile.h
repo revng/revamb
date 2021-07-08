@@ -545,8 +545,8 @@ public:
     return MetaAddress::fromPC(TheArchitecture.type(), PC);
   }
 
-  MetaAddress fromGeneric(uint64_t Address) const {
-    return MetaAddress::fromGeneric(TheArchitecture.type(), Address);
+  MetaAddress fromGeneric(uint64_t Address, uint32_t Epoch = 0) const {
+    return MetaAddress::fromGeneric(TheArchitecture.type(), Address, Epoch);
   }
 
   /// \brief Return a proper name for the given address, possibly using symbols
@@ -653,6 +653,16 @@ private:
     for (const SegmentInfo &Segment : Segments)
       if (Segment.contains(Address))
         return &Segment;
+    return nullptr;
+  }
+
+public:
+  SegmentInfo *findSegmentByEpoch(uint32_t Epoch) {
+    for (SegmentInfo &Segment : Segments){
+      revng_assert(Segment.StartVirtualAddress.epoch() == Segment.EndVirtualAddress.epoch());
+      if (Segment.StartVirtualAddress.epoch() == Epoch)
+        return &Segment;
+    }
     return nullptr;
   }
 
