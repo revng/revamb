@@ -256,6 +256,10 @@ public:
     return isJump(BB->getTerminator());
   }
 
+  void removeJTBlockFromDT(llvm::BasicBlock *BB) {
+    purgeDomTree(BB->getParent());
+  }
+
   /// \brief Return true if \p T represents a jump in the input assembly
   ///
   /// Return true if \p T targets include only dispatcher-related basic blocks
@@ -454,6 +458,12 @@ private:
       return Result;
     }
     return It->second;
+  }
+
+  void purgeDomTree(llvm::Function *F) {
+    auto It = DTMap.find(F);
+    if (It != DTMap.end())
+      DTMap.erase(It);
   }
 
 private:
