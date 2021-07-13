@@ -114,6 +114,10 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  add_flag_if_available("-Wno-unused-local-typedefs")
+endif()
+
 # Disable some warnings
 add_flag_if_available("-Wno-unused-parameter")
 add_flag_if_available("-Wno-unused-variable")
